@@ -45,17 +45,17 @@ type Group struct {
 }
 
 type Host struct {
-	Name              string            `yaml:"name"`
-	Address           string            `yaml:"address,omitempty"`
-	Hostname          string            `yaml:"hostname,omitempty"`
-	Port              int               `yaml:"port"`
-	User              string            `yaml:"user"`
-	Password          string            `yaml:"password,omitempty"`
-	KeyFile           string            `yaml:"key_file,omitempty"`
-	KeyPassword       string            `yaml:"key_password,omitempty"`
-	UseAgent          bool              `yaml:"use_agent,omitempty"`
-	StrictHostKeyCheck bool             `yaml:"strict_host_key_check,omitempty"`
-	Vars              map[string]string `yaml:"vars,omitempty"`
+	Name               string            `yaml:"name"`
+	Address            string            `yaml:"address,omitempty"`
+	Hostname           string            `yaml:"hostname,omitempty"`
+	Port               int               `yaml:"port"`
+	User               string            `yaml:"user"`
+	Password           string            `yaml:"password,omitempty"`
+	KeyFile            string            `yaml:"key_file,omitempty"`
+	KeyPassword        string            `yaml:"key_password,omitempty"`
+	UseAgent           bool              `yaml:"use_agent,omitempty"`
+	StrictHostKeyCheck bool              `yaml:"strict_host_key_check,omitempty"`
+	Vars               map[string]string `yaml:"vars,omitempty"`
 }
 
 type Playbook struct {

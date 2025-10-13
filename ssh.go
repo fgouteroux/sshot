@@ -128,10 +128,17 @@ func NewExecutor(host Host) (*Executor, error) {
 		if execOptions.Verbose {
 			log.Printf("[VERBOSE] [%s] DRY-RUN: Skipping actual SSH connection", host.Name)
 		}
+		vars := make(map[string]string)
+		if host.Vars != nil {
+			for k, v := range host.Vars {
+				vars[k] = v
+			}
+		}
+
 		return &Executor{
 			host:           host,
 			client:         nil,
-			variables:      host.Vars,
+			variables:      vars,
 			registers:      make(map[string]string),
 			completedTasks: make(map[string]bool),
 			outputWriter:   os.Stdout,
@@ -198,7 +205,7 @@ func getHostKeyCallback(strictHostKeyCheck bool) (ssh.HostKeyCallback, error) {
 	}
 
 	knownHostsPath := filepath.Join(homeDir, ".ssh", "known_hosts")
-	
+
 	// Check if known_hosts exists
 	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
 		// Create .ssh directory if it doesn't exist
@@ -206,12 +213,12 @@ func getHostKeyCallback(strictHostKeyCheck bool) (ssh.HostKeyCallback, error) {
 		if err := os.MkdirAll(sshDir, 0700); err != nil {
 			return nil, fmt.Errorf("unable to create .ssh directory: %w", err)
 		}
-		
+
 		// Create empty known_hosts file
 		if _, err := os.Create(filepath.Clean(knownHostsPath)); err != nil {
 			return nil, fmt.Errorf("unable to create known_hosts file: %w", err)
 		}
-		
+
 		if execOptions.Verbose {
 			log.Printf("[VERBOSE] Created new known_hosts file at: %s", knownHostsPath)
 		}

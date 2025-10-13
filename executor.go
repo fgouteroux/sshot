@@ -342,7 +342,7 @@ func (e *Executor) executeCommandStreaming(session *ssh.Session, cmd string, wri
 				// Write immediately to output
 				e.mu.Lock()
 				_, _ = writer.Write([]byte("    │ "))
-				_, _ = writer.Write(data)            
+				_, _ = writer.Write(data)
 				if data[n-1] != '\n' {
 					_, _ = writer.Write([]byte("\n"))
 				}
@@ -369,7 +369,7 @@ func (e *Executor) executeCommandStreaming(session *ssh.Session, cmd string, wri
 				// Write immediately to output
 				e.mu.Lock()
 				_, _ = writer.Write([]byte("    │ [stderr] "))
-				_, _ = writer.Write(data)                     
+				_, _ = writer.Write(data)
 				if data[n-1] != '\n' {
 					_, _ = writer.Write([]byte("\n"))
 				}
