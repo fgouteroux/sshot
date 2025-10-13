@@ -188,10 +188,16 @@ func (e *Executor) Close() error {
 	return nil
 }
 
-func getHostKeyCallback(strictHostKeyCheck bool) (ssh.HostKeyCallback, error) {
+func getHostKeyCallback(strictHostKeyCheck *bool) (ssh.HostKeyCallback, error) {
+	// Determine the actual value to use (default to true if nil)
+	strict := true
+	if strictHostKeyCheck != nil {
+		strict = *strictHostKeyCheck
+	}
+
 	// If strict host key checking is disabled, use insecure callback
 	// This is useful for testing environments but should be avoided in production
-	if !strictHostKeyCheck {
+	if !strict {
 		if execOptions.Verbose {
 			log.Printf("[VERBOSE] WARNING: Host key verification is disabled (strict_host_key_check: false)")
 		}
@@ -234,11 +240,18 @@ func getHostKeyCallback(strictHostKeyCheck bool) (ssh.HostKeyCallback, error) {
 	return ssh.HostKeyCallback(func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		err := hostKeyCallback(hostname, remote, key)
 		if err != nil {
+			// Extract hostname without port for ssh-keyscan command
+			host, _, splitErr := net.SplitHostPort(hostname)
+			if splitErr != nil {
+				// If splitting fails, use the original hostname
+				host = hostname
+			}
+
 			// Check if this is a host key mismatch or unknown host
 			if keyErr, ok := err.(*knownhosts.KeyError); ok && len(keyErr.Want) > 0 {
 				return fmt.Errorf("host key verification failed for %s: %w\nThe host key has changed. This could indicate a security breach.\nIf you trust this host, remove the old key from %s", hostname, err, knownHostsPath)
 			}
-			return fmt.Errorf("host key verification failed for %s: %w\nTo add this host, run: ssh-keyscan -H %s >> %s", hostname, err, hostname, knownHostsPath)
+			return fmt.Errorf("host key verification failed for %s: %w\nTo add this host, run: ssh-keyscan -H %s >> %s", hostname, err, host, knownHostsPath)
 		}
 		return nil
 	}), nil

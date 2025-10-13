@@ -13,11 +13,26 @@ type Config struct {
 	Playbook  Playbook  `yaml:"playbook"`
 }
 
+// InventoryConfig represents a standalone inventory file
+type InventoryConfig struct {
+	Hosts     []Host     `yaml:"hosts,omitempty"`
+	Groups    []Group    `yaml:"groups,omitempty"`
+	SSHConfig *SSHConfig `yaml:"ssh_config,omitempty"`
+}
+
+// PlaybookConfig represents a standalone playbook file
+type PlaybookConfig struct {
+	Name     string `yaml:"name"`
+	Parallel bool   `yaml:"parallel,omitempty"`
+	Tasks    []Task `yaml:"tasks"`
+}
+
 type ExecutionOptions struct {
-	DryRun   bool
-	Verbose  bool
-	Progress bool
-	NoColor  bool
+	DryRun        bool
+	Verbose       bool
+	Progress      bool
+	NoColor       bool
+	InventoryFile string // Path to separate inventory file
 }
 
 type Inventory struct {
@@ -33,7 +48,7 @@ type SSHConfig struct {
 	KeyPassword        string `yaml:"key_password,omitempty"`
 	UseAgent           bool   `yaml:"use_agent,omitempty"`
 	Port               int    `yaml:"port,omitempty"`
-	StrictHostKeyCheck bool   `yaml:"strict_host_key_check,omitempty"`
+	StrictHostKeyCheck *bool  `yaml:"strict_host_key_check,omitempty"`
 }
 
 type Group struct {
@@ -54,7 +69,7 @@ type Host struct {
 	KeyFile            string            `yaml:"key_file,omitempty"`
 	KeyPassword        string            `yaml:"key_password,omitempty"`
 	UseAgent           bool              `yaml:"use_agent,omitempty"`
-	StrictHostKeyCheck bool              `yaml:"strict_host_key_check,omitempty"`
+	StrictHostKeyCheck *bool             `yaml:"strict_host_key_check,omitempty"`
 	Vars               map[string]string `yaml:"vars,omitempty"`
 }
 

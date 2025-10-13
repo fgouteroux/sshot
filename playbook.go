@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -223,21 +222,17 @@ func printPlaybookSummary(results []HostResult, totalDuration time.Duration, err
 	}
 }
 
-func RunPlaybook(configPath string) error {
+func RunPlaybook(playbookPath string) error {
 	playbookStart := time.Now()
 
-	data, err := os.ReadFile(filepath.Clean(configPath))
+	// Load config (either separate or combined files)
+	config, err := loadConfig(playbookPath, execOptions.InventoryFile)
 	if err != nil {
-		return fmt.Errorf("failed to read config: %w", err)
-	}
-
-	var config Config
-	if err := unmarshalConfig(data, &config); err != nil {
-		return fmt.Errorf("failed to parse config: %w", err)
+		return err
 	}
 
 	// Apply SSH defaults to hosts
-	applySSHDefaults(&config)
+	applySSHDefaults(config)
 
 	parallel := config.Playbook.Parallel
 
@@ -261,7 +256,7 @@ func RunPlaybook(configPath string) error {
 	var results []HostResult
 
 	if len(config.Inventory.Groups) > 0 {
-		results, err = executeWithGroups(config)
+		results, err = executeWithGroups(*config)
 		if err != nil {
 			printPlaybookSummary(results, time.Since(playbookStart), err)
 			return fmt.Errorf("playbook execution failed")

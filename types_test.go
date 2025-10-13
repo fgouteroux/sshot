@@ -160,7 +160,7 @@ func TestSSHConfig_Structure(t *testing.T) {
 		KeyPassword:        "keypass",
 		UseAgent:           true,
 		Port:               2222,
-		StrictHostKeyCheck: true,
+		StrictHostKeyCheck: boolPtr(true),
 	}
 
 	if sshConfig.User != "admin" {
@@ -172,7 +172,9 @@ func TestSSHConfig_Structure(t *testing.T) {
 	if !sshConfig.UseAgent {
 		t.Error("UseAgent should be true")
 	}
-	if !sshConfig.StrictHostKeyCheck {
+	if sshConfig.StrictHostKeyCheck == nil {
+		t.Error("StrictHostKeyCheck should not be nil")
+	} else if !*sshConfig.StrictHostKeyCheck {
 		t.Error("StrictHostKeyCheck should be true")
 	}
 }

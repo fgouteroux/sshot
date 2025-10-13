@@ -233,7 +233,7 @@ func TestNewExecutor_HostnameInsteadOfAddress(t *testing.T) {
 func TestGetHostKeyCallback_StrictDisabled(t *testing.T) {
 	execOptions.Verbose = false
 
-	callback, err := getHostKeyCallback(false)
+	callback, err := getHostKeyCallback(boolPtr(false))
 	if err != nil {
 		t.Fatalf("getHostKeyCallback failed: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestGetHostKeyCallback_StrictDisabled(t *testing.T) {
 func TestGetHostKeyCallback_StrictEnabled(t *testing.T) {
 	execOptions.Verbose = false
 
-	callback, err := getHostKeyCallback(true)
+	callback, err := getHostKeyCallback(boolPtr(true))
 	if err != nil {
 		t.Fatalf("getHostKeyCallback with strict mode failed: %v", err)
 	}

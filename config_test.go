@@ -60,10 +60,11 @@ func TestApplySSHDefaults(t *testing.T) {
 			config: Config{
 				Inventory: Inventory{
 					SSHConfig: &SSHConfig{
-						User:     "defaultuser",
-						KeyFile:  "/default/key",
-						Port:     2222,
-						UseAgent: true,
+						User:               "defaultuser",
+						KeyFile:            "/default/key",
+						Port:               2222,
+						UseAgent:           true,
+						StrictHostKeyCheck: boolPtr(true),
 					},
 					Hosts: []Host{
 						{
@@ -75,10 +76,11 @@ func TestApplySSHDefaults(t *testing.T) {
 			expected: Config{
 				Inventory: Inventory{
 					SSHConfig: &SSHConfig{
-						User:     "defaultuser",
-						KeyFile:  "/default/key",
-						Port:     2222,
-						UseAgent: true,
+						User:               "defaultuser",
+						KeyFile:            "/default/key",
+						Port:               2222,
+						UseAgent:           true,
+						StrictHostKeyCheck: boolPtr(true),
 					},
 					Hosts: []Host{
 						{
@@ -88,7 +90,7 @@ func TestApplySSHDefaults(t *testing.T) {
 							KeyFile:            "/default/key",
 							Port:               2222,
 							UseAgent:           true,
-							StrictHostKeyCheck: true,
+							StrictHostKeyCheck: boolPtr(true),
 						},
 					},
 				},
@@ -99,9 +101,10 @@ func TestApplySSHDefaults(t *testing.T) {
 			config: Config{
 				Inventory: Inventory{
 					SSHConfig: &SSHConfig{
-						User:    "defaultuser",
-						KeyFile: "/default/key",
-						Port:    2222,
+						User:               "defaultuser",
+						KeyFile:            "/default/key",
+						Port:               2222,
+						StrictHostKeyCheck: boolPtr(true),
 					},
 					Hosts: []Host{
 						{
@@ -116,9 +119,10 @@ func TestApplySSHDefaults(t *testing.T) {
 			expected: Config{
 				Inventory: Inventory{
 					SSHConfig: &SSHConfig{
-						User:    "defaultuser",
-						KeyFile: "/default/key",
-						Port:    2222,
+						User:               "defaultuser",
+						KeyFile:            "/default/key",
+						Port:               2222,
+						StrictHostKeyCheck: boolPtr(true),
 					},
 					Hosts: []Host{
 						{
@@ -127,7 +131,7 @@ func TestApplySSHDefaults(t *testing.T) {
 							User:               "customuser",
 							KeyFile:            "/default/key",
 							Port:               3333,
-							StrictHostKeyCheck: true,
+							StrictHostKeyCheck: boolPtr(true),
 						},
 					},
 				},
@@ -138,8 +142,9 @@ func TestApplySSHDefaults(t *testing.T) {
 			config: Config{
 				Inventory: Inventory{
 					SSHConfig: &SSHConfig{
-						User: "defaultuser",
-						Port: 2222,
+						User:               "defaultuser",
+						Port:               2222,
+						StrictHostKeyCheck: boolPtr(true),
 					},
 					Groups: []Group{
 						{
@@ -156,8 +161,9 @@ func TestApplySSHDefaults(t *testing.T) {
 			expected: Config{
 				Inventory: Inventory{
 					SSHConfig: &SSHConfig{
-						User: "defaultuser",
-						Port: 2222,
+						User:               "defaultuser",
+						Port:               2222,
+						StrictHostKeyCheck: boolPtr(true),
 					},
 					Groups: []Group{
 						{
@@ -168,7 +174,7 @@ func TestApplySSHDefaults(t *testing.T) {
 									Hostname:           "host1.example.com",
 									User:               "defaultuser",
 									Port:               2222,
-									StrictHostKeyCheck: true,
+									StrictHostKeyCheck: boolPtr(true),
 								},
 							},
 						},
@@ -196,7 +202,72 @@ func TestApplySSHDefaults(t *testing.T) {
 							Name:               "test",
 							Address:            "192.168.1.1",
 							User:               "testuser",
-							StrictHostKeyCheck: false, // No SSH config means no defaults applied
+							StrictHostKeyCheck: boolPtr(true), // Defaults to true when no ssh_config
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ssh_config sets false, host doesn't override",
+			config: Config{
+				Inventory: Inventory{
+					SSHConfig: &SSHConfig{
+						User:               "admin",
+						StrictHostKeyCheck: boolPtr(false),
+					},
+					Hosts: []Host{
+						{
+							Address: "192.168.1.1",
+						},
+					},
+				},
+			},
+			expected: Config{
+				Inventory: Inventory{
+					SSHConfig: &SSHConfig{
+						User:               "admin",
+						StrictHostKeyCheck: boolPtr(false),
+					},
+					Hosts: []Host{
+						{
+							Name:               "192.168.1.1",
+							Address:            "192.168.1.1",
+							User:               "admin",
+							StrictHostKeyCheck: boolPtr(false),
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ssh_config sets false, host overrides to true",
+			config: Config{
+				Inventory: Inventory{
+					SSHConfig: &SSHConfig{
+						User:               "admin",
+						StrictHostKeyCheck: boolPtr(false),
+					},
+					Hosts: []Host{
+						{
+							Address:            "192.168.1.1",
+							StrictHostKeyCheck: boolPtr(true),
+						},
+					},
+				},
+			},
+			expected: Config{
+				Inventory: Inventory{
+					SSHConfig: &SSHConfig{
+						User:               "admin",
+						StrictHostKeyCheck: boolPtr(false),
+					},
+					Hosts: []Host{
+						{
+							Name:               "192.168.1.1",
+							Address:            "192.168.1.1",
+							User:               "admin",
+							StrictHostKeyCheck: boolPtr(true), // Host override takes precedence
 						},
 					},
 				},
@@ -232,8 +303,10 @@ func TestApplySSHDefaults(t *testing.T) {
 				if host.UseAgent != expected.UseAgent {
 					t.Errorf("Host[%d].UseAgent = %v, want %v", i, host.UseAgent, expected.UseAgent)
 				}
-				if host.StrictHostKeyCheck != expected.StrictHostKeyCheck {
-					t.Errorf("Host[%d].StrictHostKeyCheck = %v, want %v", i, host.StrictHostKeyCheck, expected.StrictHostKeyCheck)
+				// Compare StrictHostKeyCheck properly
+				if !compareBoolPtr(host.StrictHostKeyCheck, expected.StrictHostKeyCheck) {
+					t.Errorf("Host[%d].StrictHostKeyCheck = %v, want %v",
+						i, formatBoolPtr(host.StrictHostKeyCheck), formatBoolPtr(expected.StrictHostKeyCheck))
 				}
 			}
 
@@ -267,13 +340,14 @@ func TestApplySSHDefaultsToHost(t *testing.T) {
 				Hostname: "server1.example.com",
 			},
 			defaults: SSHConfig{
-				User: "admin",
+				User:               "admin",
+				StrictHostKeyCheck: boolPtr(true),
 			},
 			expected: Host{
 				Name:               "server1.example.com",
 				Hostname:           "server1.example.com",
 				User:               "admin",
-				StrictHostKeyCheck: true,
+				StrictHostKeyCheck: boolPtr(true),
 			},
 		},
 		{
@@ -281,11 +355,13 @@ func TestApplySSHDefaultsToHost(t *testing.T) {
 			host: Host{
 				Address: "192.168.1.1",
 			},
-			defaults: SSHConfig{},
+			defaults: SSHConfig{
+				StrictHostKeyCheck: boolPtr(true),
+			},
 			expected: Host{
 				Name:               "192.168.1.1",
 				Address:            "192.168.1.1",
-				StrictHostKeyCheck: true,
+				StrictHostKeyCheck: boolPtr(true),
 			},
 		},
 		{
@@ -295,12 +371,14 @@ func TestApplySSHDefaultsToHost(t *testing.T) {
 				Address:  "192.168.1.1",
 				Hostname: "server1.example.com",
 			},
-			defaults: SSHConfig{},
+			defaults: SSHConfig{
+				StrictHostKeyCheck: boolPtr(true),
+			},
 			expected: Host{
 				Name:               "custom-name",
 				Address:            "192.168.1.1",
 				Hostname:           "server1.example.com",
-				StrictHostKeyCheck: true,
+				StrictHostKeyCheck: boolPtr(true),
 			},
 		},
 	}
@@ -315,8 +393,9 @@ func TestApplySSHDefaultsToHost(t *testing.T) {
 			if tt.host.User != tt.expected.User {
 				t.Errorf("User = %q, want %q", tt.host.User, tt.expected.User)
 			}
-			if tt.host.StrictHostKeyCheck != tt.expected.StrictHostKeyCheck {
-				t.Errorf("StrictHostKeyCheck = %v, want %v", tt.host.StrictHostKeyCheck, tt.expected.StrictHostKeyCheck)
+			if !compareBoolPtr(tt.host.StrictHostKeyCheck, tt.expected.StrictHostKeyCheck) {
+				t.Errorf("StrictHostKeyCheck = %v, want %v",
+					formatBoolPtr(tt.host.StrictHostKeyCheck), formatBoolPtr(tt.expected.StrictHostKeyCheck))
 			}
 		})
 	}

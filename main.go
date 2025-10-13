@@ -15,6 +15,8 @@ func main() {
 	verboseShort := flag.Bool("v", false, "Enable verbose logging (shorthand)")
 	progress := flag.Bool("progress", false, "Show progress indicators for long-running tasks")
 	noColor := flag.Bool("no-color", false, "Disable colored output")
+	inventory := flag.String("inventory", "", "Path to inventory file (if separate from playbook)")
+	inventoryShort := flag.String("i", "", "Path to inventory file (shorthand)")
 
 	flag.Parse()
 
@@ -23,8 +25,17 @@ func main() {
 	execOptions.Progress = *progress
 	execOptions.NoColor = *noColor
 
+	// Use inventory flag (prefer long form over short form)
+	if *inventory != "" {
+		execOptions.InventoryFile = *inventory
+	} else if *inventoryShort != "" {
+		execOptions.InventoryFile = *inventoryShort
+	}
+
 	if flag.NArg() < 1 {
-		flag.Usage()
+		log.Println("Usage: sshot [options] <playbook.yml>")
+		log.Println("\nOptions:")
+		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
@@ -33,9 +44,19 @@ func main() {
 		log.Fatalf("Playbook file not found: %s", playbookPath)
 	}
 
+	// If inventory file is specified, validate it exists
+	if execOptions.InventoryFile != "" {
+		if _, err := os.Stat(execOptions.InventoryFile); os.IsNotExist(err) {
+			log.Fatalf("Inventory file not found: %s", execOptions.InventoryFile)
+		}
+	}
+
 	if execOptions.Verbose {
 		log.Printf("[VERBOSE] Starting sshot")
 		log.Printf("[VERBOSE] Playbook path: %s", playbookPath)
+		if execOptions.InventoryFile != "" {
+			log.Printf("[VERBOSE] Inventory path: %s", execOptions.InventoryFile)
+		}
 		log.Printf("[VERBOSE] Options: dry-run=%v, verbose=%v, progress=%v, no-color=%v",
 			execOptions.DryRun, execOptions.Verbose, execOptions.Progress, execOptions.NoColor)
 	}
