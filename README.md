@@ -22,7 +22,6 @@ Run `sshot` with a playbook file and optional flags:
 ### Command-Line Options
 - `-n, --dry-run`: Run in dry-run mode (simulates execution without making changes).
 - `-v, --verbose`: Enable verbose logging for detailed output.
-- `-p, --parallel`: Execute tasks on all hosts in parallel.
 - `--progress`: Show progress indicators for long-running tasks.
 - `--no-color`: Disable colored output.
 
@@ -96,7 +95,6 @@ playbook:
   - `retry_delay`: Delay between retries (seconds).
   - `timeout`: Task timeout (seconds).
   - `until_success`: Retry until success (up to 60 retries).
-  - `stream`: Stream output in real-time (with `--progress`).
 
 ## Key Features
 - **SSH Authentication**: Supports password, key-based, and SSH agent authentication.

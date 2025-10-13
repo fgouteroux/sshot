@@ -1,0 +1,48 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - 'README.md'
+      - 'CHANGELOG.md'
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'README.md'
+      - 'CHANGELOG.md'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+
+    - name: Run linters
+      uses: golangci/golangci-lint-action@v7
+      with:
+        version: v2.1.6
+        args: --timeout 10m
+
+    - name: Format
+      run: make fmt
+
+    - name: Run tests
+      run: make test
+
+    -
+      name: Run GoReleaser
+      uses: goreleaser/goreleaser-action@v2
+      with:
+        distribution: goreleaser
+        version: latest
+        args: build --snapshot --clean
+
