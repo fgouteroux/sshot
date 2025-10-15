@@ -15,6 +15,8 @@ func main() {
 	verboseShort := flag.Bool("v", false, "Enable verbose logging (shorthand)")
 	progress := flag.Bool("progress", false, "Show progress indicators for long-running tasks")
 	noColor := flag.Bool("no-color", false, "Disable colored output")
+	fullOutput := flag.Bool("full-output", false, "Show complete command output without truncation")
+	fullOutputShort := flag.Bool("f", false, "Show complete command output (shorthand)")
 	inventory := flag.String("inventory", "", "Path to inventory file (if separate from playbook)")
 	inventoryShort := flag.String("i", "", "Path to inventory file (shorthand)")
 
@@ -24,6 +26,7 @@ func main() {
 	execOptions.Verbose = *verbose || *verboseShort
 	execOptions.Progress = *progress
 	execOptions.NoColor = *noColor
+	execOptions.FullOutput = *fullOutput || *fullOutputShort
 
 	// Use inventory flag (prefer long form over short form)
 	if *inventory != "" {
@@ -57,8 +60,8 @@ func main() {
 		if execOptions.InventoryFile != "" {
 			log.Printf("[VERBOSE] Inventory path: %s", execOptions.InventoryFile)
 		}
-		log.Printf("[VERBOSE] Options: dry-run=%v, verbose=%v, progress=%v, no-color=%v",
-			execOptions.DryRun, execOptions.Verbose, execOptions.Progress, execOptions.NoColor)
+		log.Printf("[VERBOSE] Options: dry-run=%v, verbose=%v, progress=%v, no-color=%v, full-output=%v",
+			execOptions.DryRun, execOptions.Verbose, execOptions.Progress, execOptions.NoColor, execOptions.FullOutput)
 	}
 
 	if err := RunPlaybook(playbookPath); err != nil {

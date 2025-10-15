@@ -254,40 +254,27 @@ func (e *Executor) ExecuteTask(task Task) error {
 			e.mu.Lock()
 			fmt.Fprintf(writer, "  ⚠ Failed (ignored): %v\n", err)
 			if output != "" {
-				fmt.Fprintf(writer, "    Output: %s\n", strings.TrimSpace(output))
+				e.printOutput(writer, output)
 			}
 			e.completedTasks[task.Name] = true
 			e.mu.Unlock()
 			return nil
+		}
+		// Show output on error before returning
+		if output != "" {
+			e.mu.Lock()
+			e.printOutput(writer, output)
+			e.mu.Unlock()
 		}
 		return err
 	}
 
 	e.mu.Lock()
 	if attempt == 1 {
-		fmt.Fprintf(writer, "  %s✓ Success%s\n", ColorGreen, ColorReset)
+		fmt.Fprintf(writer, "  %s✓ Success%s\n", color(ColorGreen), color(ColorReset))
 	}
 	if output != "" {
-		if len(output) < 500 {
-			fmt.Fprintf(writer, "    %sOutput:%s %s\n", ColorGray, ColorReset, strings.TrimSpace(output))
-		} else {
-			lines := strings.Split(strings.TrimSpace(output), "\n")
-			if len(lines) <= 10 {
-				fmt.Fprintf(writer, "    %sOutput:%s\n", ColorGray, ColorReset)
-				for _, line := range lines {
-					fmt.Fprintf(writer, "      %s\n", line)
-				}
-			} else {
-				fmt.Fprintf(writer, "    %sOutput%s (showing first 5 and last 5 lines of %d total):\n", ColorGray, ColorReset, len(lines))
-				for i := 0; i < 5; i++ {
-					fmt.Fprintf(writer, "      %s\n", lines[i])
-				}
-				fmt.Fprintf(writer, "      %s... (%d lines omitted) ...%s\n", ColorGray, len(lines)-10, ColorReset)
-				for i := len(lines) - 5; i < len(lines); i++ {
-					fmt.Fprintf(writer, "      %s\n", lines[i])
-				}
-			}
-		}
+		e.printOutput(writer, output)
 	}
 	e.completedTasks[task.Name] = true
 	e.mu.Unlock()
@@ -631,12 +618,12 @@ func (e *Executor) isAllowedExitCode(err error, allowedCodes []int) bool {
 	if err == nil {
 		return true
 	}
-	
+
 	// If no specific exit codes are allowed, only 0 is acceptable
 	if len(allowedCodes) == 0 {
 		return false
 	}
-	
+
 	// Extract exit code from error
 	if exitErr, ok := err.(*ssh.ExitError); ok {
 		exitCode := exitErr.ExitStatus()
@@ -646,6 +633,44 @@ func (e *Executor) isAllowedExitCode(err error, allowedCodes []int) bool {
 			}
 		}
 	}
-	
+
 	return false
+}
+
+// printOutput handles output formatting with optional truncation
+func (e *Executor) printOutput(writer io.Writer, output string) {
+	// If full output is enabled, show everything
+	if execOptions.FullOutput {
+		lines := strings.Split(strings.TrimSpace(output), "\n")
+		if len(lines) == 1 {
+			fmt.Fprintf(writer, "    %sOutput:%s %s\n", color(ColorGray), color(ColorReset), strings.TrimSpace(output))
+		} else {
+			fmt.Fprintf(writer, "    %sOutput:%s (%d lines)\n", color(ColorGray), color(ColorReset), len(lines))
+			for _, line := range lines {
+				fmt.Fprintf(writer, "      %s\n", line)
+			}
+		}
+	} else {
+		// Original truncation logic
+		if len(output) < 500 {
+			fmt.Fprintf(writer, "    %sOutput:%s %s\n", color(ColorGray), color(ColorReset), strings.TrimSpace(output))
+		} else {
+			lines := strings.Split(strings.TrimSpace(output), "\n")
+			if len(lines) <= 10 {
+				fmt.Fprintf(writer, "    %sOutput:%s\n", color(ColorGray), color(ColorReset))
+				for _, line := range lines {
+					fmt.Fprintf(writer, "      %s\n", line)
+				}
+			} else {
+				fmt.Fprintf(writer, "    %sOutput%s (showing first 5 and last 5 lines of %d total):\n", color(ColorGray), color(ColorReset), len(lines))
+				for i := 0; i < 5; i++ {
+					fmt.Fprintf(writer, "      %s\n", lines[i])
+				}
+				fmt.Fprintf(writer, "      %s... (%d lines omitted) ...%s\n", color(ColorGray), len(lines)-10, color(ColorReset))
+				for i := len(lines) - 5; i < len(lines); i++ {
+					fmt.Fprintf(writer, "      %s\n", lines[i])
+				}
+			}
+		}
+	}
 }

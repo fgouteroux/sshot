@@ -32,7 +32,8 @@ type ExecutionOptions struct {
 	Verbose       bool
 	Progress      bool
 	NoColor       bool
-	InventoryFile string // Path to separate inventory file
+	FullOutput    bool
+	InventoryFile string
 }
 
 type Inventory struct {

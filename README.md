@@ -95,6 +95,7 @@ sshot [options] <playbook.yml>
 - `-n, --dry-run` - Run in dry-run mode (simulate without executing)
 - `-v, --verbose` - Enable verbose logging
 - `--progress` - Show progress indicators
+- `-f, --full-output` - Show complete command output without truncation
 - `--no-color` - Disable colored output
 
 ### Examples
@@ -117,6 +118,69 @@ sshot -n -v -i inventory.yml playbook.yml
 **With progress indicators:**
 ```bash
 sshot --progress -i inventory.yml playbook.yml
+```
+
+**With full output:**
+```bash
+sshot -f -i inventory.yml playbook.yml
+```
+
+**Verbose with full output:**
+```bash
+sshot -v -f playbook.yml
+```
+
+## Usage Examples
+
+### Example 1: Default behavior (truncated output)
+```bash
+$ sshot playbook.yml
+┌─ Host: server1 (192.168.1.10)
+│
+│ [1/1] Check logs
+  ✓ Success
+    Output (showing first 5 and last 5 lines of 100 total):
+      Line 1
+      Line 2
+      Line 3
+      Line 4
+      Line 5
+      ... (90 lines omitted) ...
+      Line 96
+      Line 97
+      Line 98
+      Line 99
+      Line 100
+```
+
+### Example 2: With --full-output flag
+```bash
+$ sshot --full-output playbook.yml
+# or
+$ sshot -f playbook.yml
+
+┌─ Host: server1 (192.168.1.10)
+│
+│ [1/1] Check logs
+  ✓ Success
+    Output: (100 lines)
+      Line 1
+      Line 2
+      Line 3
+      ...
+      Line 100
+```
+
+### Example 3: Combined with other options
+```bash
+# Dry-run with full output
+$ sshot -n -f playbook.yml
+
+# Verbose with full output
+$ sshot -v -f playbook.yml
+
+# Full output without color
+$ sshot -f --no-color playbook.yml
 ```
 
 ## Features
