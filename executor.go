@@ -79,6 +79,11 @@ func (e *Executor) ExecuteTask(task Task) error {
 		if task.Sudo {
 			fmt.Fprintf(writer, "      (with sudo)\n")
 		}
+
+		if len(task.AllowedExitCodes) > 0 {
+			fmt.Fprintf(writer, "      Allowed exit codes: %v\n", task.AllowedExitCodes)
+		}
+
 		if len(task.DependsOn) > 0 {
 			fmt.Fprintf(writer, "      Dependencies: %v\n", task.DependsOn)
 		}
@@ -122,10 +127,52 @@ func (e *Executor) ExecuteTask(task Task) error {
 		switch {
 		case task.Command != "":
 			output, err = e.executeCommand(task.Command, task.Sudo)
+			// Check if the exit code is allowed
+			if err != nil && e.isAllowedExitCode(err, task.AllowedExitCodes) {
+				if execOptions.Verbose {
+					e.mu.Lock()
+					log.SetOutput(writer)
+					if exitErr, ok := err.(*ssh.ExitError); ok {
+						log.Printf("[VERBOSE] [%s] Exit code %d is in allowed list: %v",
+							e.host.Name, exitErr.ExitStatus(), task.AllowedExitCodes)
+					}
+					log.SetOutput(os.Stderr)
+					e.mu.Unlock()
+				}
+				err = nil
+			}
 		case task.Shell != "":
 			output, err = e.executeCommand(task.Shell, task.Sudo)
+			// Check if the exit code is allowed
+			if err != nil && e.isAllowedExitCode(err, task.AllowedExitCodes) {
+				if execOptions.Verbose {
+					e.mu.Lock()
+					log.SetOutput(writer)
+					if exitErr, ok := err.(*ssh.ExitError); ok {
+						log.Printf("[VERBOSE] [%s] Exit code %d is in allowed list: %v",
+							e.host.Name, exitErr.ExitStatus(), task.AllowedExitCodes)
+					}
+					log.SetOutput(os.Stderr)
+					e.mu.Unlock()
+				}
+				err = nil
+			}
 		case task.Script != "":
 			output, err = e.executeScript(task.Script, task.Sudo)
+			// Check if the exit code is allowed
+			if err != nil && e.isAllowedExitCode(err, task.AllowedExitCodes) {
+				if execOptions.Verbose {
+					e.mu.Lock()
+					log.SetOutput(writer)
+					if exitErr, ok := err.(*ssh.ExitError); ok {
+						log.Printf("[VERBOSE] [%s] Exit code %d is in allowed list: %v",
+							e.host.Name, exitErr.ExitStatus(), task.AllowedExitCodes)
+					}
+					log.SetOutput(os.Stderr)
+					e.mu.Unlock()
+				}
+				err = nil
+			}
 		case task.Copy != nil:
 			output, err = e.executeCopy(task.Copy)
 		case task.WaitFor != "":
@@ -578,4 +625,27 @@ func (e *Executor) evaluateCondition(condition string) bool {
 	}
 
 	return true
+}
+
+func (e *Executor) isAllowedExitCode(err error, allowedCodes []int) bool {
+	if err == nil {
+		return true
+	}
+	
+	// If no specific exit codes are allowed, only 0 is acceptable
+	if len(allowedCodes) == 0 {
+		return false
+	}
+	
+	// Extract exit code from error
+	if exitErr, ok := err.(*ssh.ExitError); ok {
+		exitCode := exitErr.ExitStatus()
+		for _, allowed := range allowedCodes {
+			if exitCode == allowed {
+				return true
+			}
+		}
+	}
+	
+	return false
 }

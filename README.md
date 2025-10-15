@@ -293,6 +293,27 @@ tasks:
   depends_on: [Install Dependencies, Clone Repository]
 ```
 
+### Task with Allowed Exit Codes
+```yaml
+- name: Search for pattern
+  command: grep "error" /var/log/app.log
+  allowed_exit_codes: [0, 1]  # 0 = found, 1 = not found
+  register: search_result
+
+- name: Compare files
+  command: diff file1.txt file2.txt
+  allowed_exit_codes: [0, 1]  # 0 = identical, 1 = different
+
+- name: Custom script
+  command: ./check_status.sh
+  allowed_exit_codes: [0, 2, 3]  # Multiple allowed codes
+```
+
+This is useful for commands like `grep`, `diff`, or custom scripts where
+non-zero exit codes have specific meanings that should still be considered
+successful. If a command exits with a code in the allowed list, it will
+be treated as successful and won't trigger retries or fail the playbook.
+
 ### File Copy Task
 ```yaml
 - name: Copy config

@@ -80,22 +80,23 @@ type Playbook struct {
 }
 
 type Task struct {
-	Name         string            `yaml:"name"`
-	Command      string            `yaml:"command,omitempty"`
-	Script       string            `yaml:"script,omitempty"`
-	Copy         *CopyTask         `yaml:"copy,omitempty"`
-	Shell        string            `yaml:"shell,omitempty"`
-	Sudo         bool              `yaml:"sudo,omitempty"`
-	When         string            `yaml:"when,omitempty"`
-	Register     string            `yaml:"register,omitempty"`
-	IgnoreError  bool              `yaml:"ignore_error,omitempty"`
-	Vars         map[string]string `yaml:"vars,omitempty"`
-	DependsOn    []string          `yaml:"depends_on,omitempty"`
-	WaitFor      string            `yaml:"wait_for,omitempty"`
-	Retries      int               `yaml:"retries,omitempty"`
-	RetryDelay   int               `yaml:"retry_delay,omitempty"`
-	Timeout      int               `yaml:"timeout,omitempty"`
-	UntilSuccess bool              `yaml:"until_success,omitempty"`
+	Name             string            `yaml:"name"`
+	Command          string            `yaml:"command,omitempty"`
+	Script           string            `yaml:"script,omitempty"`
+	Copy             *CopyTask         `yaml:"copy,omitempty"`
+	Shell            string            `yaml:"shell,omitempty"`
+	Sudo             bool              `yaml:"sudo,omitempty"`
+	When             string            `yaml:"when,omitempty"`
+	Register         string            `yaml:"register,omitempty"`
+	IgnoreError      bool              `yaml:"ignore_error,omitempty"`
+	Vars             map[string]string `yaml:"vars,omitempty"`
+	DependsOn        []string          `yaml:"depends_on,omitempty"`
+	WaitFor          string            `yaml:"wait_for,omitempty"`
+	Retries          int               `yaml:"retries,omitempty"`
+	RetryDelay       int               `yaml:"retry_delay,omitempty"`
+	Timeout          int               `yaml:"timeout,omitempty"`
+	UntilSuccess     bool              `yaml:"until_success,omitempty"`
+	AllowedExitCodes []int             `yaml:"allowed_exit_codes,omitempty"`
 }
 
 type CopyTask struct {
