@@ -1,0 +1,49 @@
+# Site settings
+title: SSHOT Documentation
+description: Documentation for SSH Orchestrator Tool (SSHOT)
+baseurl: "/sshot" # the subpath of your site, e.g. /blog - change this to match your repository name
+url: "" # the base hostname & protocol for your site, e.g. http://example.com
+
+# Build settings
+markdown: kramdown
+remote_theme: pages-themes/cayman@v0.2.0
+plugins:
+  - jekyll-remote-theme
+
+# Theme customization
+show_downloads: true
+google_analytics: 
+
+# Sidebar navigation
+nav:
+  - title: Home
+    url: /
+  - title: Installation
+    url: /#installation
+  - title: Quick Start
+    url: /#quick-start
+  - title: Documentation
+    url: /#core-concepts
+  - title: Examples
+    url: /#usage-examples
+  - title: GitHub
+    url: https://github.com/fgouteroux/sshot
+
+# Footer content
+author:
+  name: François Gouteroux
+  url: https://github.com/fgouteroux
+
+# Additional settings
+kramdown:
+  syntax_highlighter_opts:
+    default_lang: yaml
+    css_class: 'highlight'
+
+# Custom headers
+defaults:
+  -
+    scope:
+      path: ""
+    values:
+      layout: "default"
