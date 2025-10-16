@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -128,50 +129,74 @@ func (e *Executor) ExecuteTask(task Task) error {
 		case task.Command != "":
 			output, err = e.executeCommand(task.Command, task.Sudo)
 			// Check if the exit code is allowed
-			if err != nil && e.isAllowedExitCode(err, task.AllowedExitCodes) {
+			if err != nil && len(task.AllowedExitCodes) > 0 {
 				if execOptions.Verbose {
 					e.mu.Lock()
 					log.SetOutput(writer)
-					if exitErr, ok := err.(*ssh.ExitError); ok {
-						log.Printf("[VERBOSE] [%s] Exit code %d is in allowed list: %v",
-							e.host.Name, exitErr.ExitStatus(), task.AllowedExitCodes)
-					}
+					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.host.Name, err)
+					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.host.Name, task.AllowedExitCodes)
 					log.SetOutput(os.Stderr)
 					e.mu.Unlock()
 				}
-				err = nil
+
+				if e.isAllowedExitCode(err, task.AllowedExitCodes) {
+					if execOptions.Verbose {
+						e.mu.Lock()
+						log.SetOutput(writer)
+						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.host.Name)
+						log.SetOutput(os.Stderr)
+						e.mu.Unlock()
+					}
+					err = nil
+				}
 			}
 		case task.Shell != "":
 			output, err = e.executeCommand(task.Shell, task.Sudo)
 			// Check if the exit code is allowed
-			if err != nil && e.isAllowedExitCode(err, task.AllowedExitCodes) {
+			if err != nil && len(task.AllowedExitCodes) > 0 {
 				if execOptions.Verbose {
 					e.mu.Lock()
 					log.SetOutput(writer)
-					if exitErr, ok := err.(*ssh.ExitError); ok {
-						log.Printf("[VERBOSE] [%s] Exit code %d is in allowed list: %v",
-							e.host.Name, exitErr.ExitStatus(), task.AllowedExitCodes)
-					}
+					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.host.Name, err)
+					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.host.Name, task.AllowedExitCodes)
 					log.SetOutput(os.Stderr)
 					e.mu.Unlock()
 				}
-				err = nil
+
+				if e.isAllowedExitCode(err, task.AllowedExitCodes) {
+					if execOptions.Verbose {
+						e.mu.Lock()
+						log.SetOutput(writer)
+						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.host.Name)
+						log.SetOutput(os.Stderr)
+						e.mu.Unlock()
+					}
+					err = nil
+				}
 			}
 		case task.Script != "":
 			output, err = e.executeScript(task.Script, task.Sudo)
 			// Check if the exit code is allowed
-			if err != nil && e.isAllowedExitCode(err, task.AllowedExitCodes) {
+			if err != nil && len(task.AllowedExitCodes) > 0 {
 				if execOptions.Verbose {
 					e.mu.Lock()
 					log.SetOutput(writer)
-					if exitErr, ok := err.(*ssh.ExitError); ok {
-						log.Printf("[VERBOSE] [%s] Exit code %d is in allowed list: %v",
-							e.host.Name, exitErr.ExitStatus(), task.AllowedExitCodes)
-					}
+					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.host.Name, err)
+					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.host.Name, task.AllowedExitCodes)
 					log.SetOutput(os.Stderr)
 					e.mu.Unlock()
 				}
-				err = nil
+
+				if e.isAllowedExitCode(err, task.AllowedExitCodes) {
+					if execOptions.Verbose {
+						e.mu.Lock()
+						log.SetOutput(writer)
+						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.host.Name)
+						log.SetOutput(os.Stderr)
+						e.mu.Unlock()
+					}
+					err = nil
+				}
 			}
 		case task.Copy != nil:
 			output, err = e.executeCopy(task.Copy)
@@ -614,6 +639,7 @@ func (e *Executor) evaluateCondition(condition string) bool {
 	return true
 }
 
+// In executor.go - Update isAllowedExitCode function to focus on command exit codes
 func (e *Executor) isAllowedExitCode(err error, allowedCodes []int) bool {
 	if err == nil {
 		return true
@@ -624,17 +650,58 @@ func (e *Executor) isAllowedExitCode(err error, allowedCodes []int) bool {
 		return false
 	}
 
-	// Extract exit code from error
-	if exitErr, ok := err.(*ssh.ExitError); ok {
-		exitCode := exitErr.ExitStatus()
-		for _, allowed := range allowedCodes {
-			if exitCode == allowed {
-				return true
-			}
+	// Extract exit code from any error type
+	exitCode := extractExitCode(err)
+	if exitCode < 0 {
+		// No valid exit code found
+		return false
+	}
+
+	// Check if the exit code is in the allowed list
+	for _, allowed := range allowedCodes {
+		if exitCode == allowed {
+			return true
 		}
 	}
 
 	return false
+}
+
+// Helper function to extract exit code from various error types
+func extractExitCode(err error) int {
+	// Try SSH ExitError type first
+	if exitErr, ok := err.(*ssh.ExitError); ok {
+		return exitErr.ExitStatus()
+	}
+
+	// Try to parse from error message
+	errStr := err.Error()
+
+	// Common patterns for exit codes in error messages
+	patterns := []string{
+		"Process exited with status ",
+		"exit status ",
+		"exited with code ",
+	}
+
+	for _, pattern := range patterns {
+		if idx := strings.Index(errStr, pattern); idx >= 0 {
+			codeStr := strings.TrimSpace(errStr[idx+len(pattern):])
+			// If there's more text after the number, trim it
+			if spaceIdx := strings.Index(codeStr, " "); spaceIdx > 0 {
+				codeStr = codeStr[:spaceIdx]
+			}
+
+			// Try to parse the exit code
+			code, err := strconv.Atoi(codeStr)
+			if err == nil {
+				return code
+			}
+		}
+	}
+
+	// No valid exit code found
+	return -1
 }
 
 // printOutput handles output formatting with optional truncation
