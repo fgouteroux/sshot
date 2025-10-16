@@ -380,3 +380,173 @@ func TestExecutor_ExecuteTaskNoType(t *testing.T) {
 		t.Errorf("Error should contain 'no executable task type', got: %v", err)
 	}
 }
+
+func TestExecutor_ExecuteLocalActionDryRun(t *testing.T) {
+	execOptions.DryRun = true
+	defer func() {
+		execOptions.DryRun = false
+	}()
+
+	var output bytes.Buffer
+	executor := &Executor{
+		host: Host{
+			Name: "testhost",
+		},
+		variables:      make(map[string]string),
+		registers:      make(map[string]string),
+		completedTasks: make(map[string]bool),
+		outputWriter:   &output,
+	}
+
+	task := Task{
+		Name:        "Local Action Task",
+		LocalAction: "echo 'Running locally'",
+	}
+
+	err := executor.ExecuteTask(task)
+	if err != nil {
+		t.Errorf("ExecuteTask() error = %v", err)
+	}
+
+	outputStr := output.String()
+	if !strings.Contains(outputStr, "Local Action") {
+		t.Errorf("Output should contain 'Local Action', got: %q", outputStr)
+	}
+}
+
+func TestExecutor_RunOnceAndDelegation(t *testing.T) {
+	execOptions.DryRun = true
+	defer func() {
+		execOptions.DryRun = false
+		// Reset run_once tracking after the test
+		ResetRunOnceTracking()
+	}()
+
+	var output bytes.Buffer
+	executor := &Executor{
+		host: Host{
+			Name: "testhost",
+		},
+		variables:      make(map[string]string),
+		registers:      make(map[string]string),
+		completedTasks: make(map[string]bool),
+		outputWriter:   &output,
+	}
+
+	// Test run_once local_action
+	task1 := Task{
+		Name:        "Run Once Local Task",
+		LocalAction: "echo 'Running locally once'",
+		RunOnce:     true,
+	}
+
+	// First execution
+	err := executor.ExecuteTask(task1)
+	if err != nil {
+		t.Errorf("ExecuteTask() error = %v", err)
+	}
+
+	outputStr := output.String()
+	if !strings.Contains(outputStr, "Local Action") {
+		t.Errorf("Output should contain 'Local Action', got: %q", outputStr)
+	}
+	if !strings.Contains(outputStr, "run once") {
+		t.Errorf("Output should contain 'run once', got: %q", outputStr)
+	}
+
+	// Reset output buffer
+	output.Reset()
+
+	// Second execution should be skipped
+	err = executor.ExecuteTask(task1)
+	if err != nil {
+		t.Errorf("ExecuteTask() error = %v", err)
+	}
+
+	outputStr = output.String()
+	if !strings.Contains(outputStr, "Skipped") && !strings.Contains(outputStr, "run_once") {
+		t.Errorf("Output should indicate task was skipped due to run_once, got: %q", outputStr)
+	}
+
+	// Test delegation
+	output.Reset()
+
+	task2 := Task{
+		Name:       "Delegated Task",
+		Command:    "echo 'Running on delegate'",
+		DelegateTo: "otherhost",
+	}
+
+	err = executor.ExecuteTask(task2)
+	if err != nil {
+		t.Errorf("ExecuteTask() error = %v", err)
+	}
+
+	outputStr = output.String()
+	if !strings.Contains(outputStr, "delegated to") {
+		t.Errorf("Output should contain 'delegated to', got: %q", outputStr)
+	}
+}
+
+func TestExecutor_DelegateTo(t *testing.T) {
+	execOptions.DryRun = true
+	defer func() {
+		execOptions.DryRun = false
+		ResetRunOnceTracking()
+	}()
+
+	// Create two hosts
+	host1 := Host{Name: "host1", Address: "192.168.1.1"}
+	host2 := Host{Name: "host2", Address: "192.168.1.2"}
+
+	// Create executors for each host
+	var output1, output2 bytes.Buffer
+
+	executor1 := &Executor{
+		host:           host1,
+		variables:      make(map[string]string),
+		registers:      make(map[string]string),
+		completedTasks: make(map[string]bool),
+		outputWriter:   &output1,
+	}
+
+	executor2 := &Executor{
+		host:           host2,
+		variables:      make(map[string]string),
+		registers:      make(map[string]string),
+		completedTasks: make(map[string]bool),
+		outputWriter:   &output2,
+	}
+
+	// Create a task delegated to host2
+	delegatedTask := Task{
+		Name:       "Delegated Task",
+		Command:    "echo 'Running on delegate'",
+		DelegateTo: "host2",
+	}
+
+	// Execute on host1 (should be skipped)
+	err := executor1.ExecuteTask(delegatedTask)
+	if err != nil {
+		t.Errorf("ExecuteTask() error = %v", err)
+	}
+
+	output1Str := output1.String()
+	if !strings.Contains(output1Str, "Skipped") || !strings.Contains(output1Str, "delegated to") {
+		t.Errorf("Output should indicate task was skipped due to delegation, got: %q", output1Str)
+	}
+
+	// Execute on host2 (should run)
+	err = executor2.ExecuteTask(delegatedTask)
+	if err != nil {
+		t.Errorf("ExecuteTask() error = %v", err)
+	}
+
+	output2Str := output2.String()
+	if strings.Contains(output2Str, "Skipped") {
+		t.Errorf("Task should not be skipped on the delegated host, got: %q", output2Str)
+	}
+	if !strings.Contains(output2Str, "Would execute") {
+		t.Errorf("Output should indicate task would execute on the delegated host, got: %q", output2Str)
+	}
+}

@@ -275,7 +275,7 @@ groups:
 ```
 
 ### Playbook Structure
-
+{% raw %}
 ```yaml
 name: Multi-tier Deployment
 parallel: false  # Global parallel setting
@@ -310,7 +310,7 @@ tasks:
     
   - name: Production only task
     command: deploy-prod.sh
-    when: "{{ .env }} == 'production'"
+    when: "{{ .env }} == production"
     register: deploy_output
 ```
 
@@ -339,7 +339,7 @@ tasks:
 ```yaml
 - name: Ubuntu specific
   command: apt-get update
-  when: "{{ .os }} == 'ubuntu'"
+  when: "{{ .os }} == ubuntu"
 ```
 
 ### Task with Retries
@@ -408,6 +408,50 @@ be treated as successful and won't trigger retries or fail the playbook.
 
 - name: Wait for HTTP
   wait_for: http://localhost:8080/health
+```
+
+### Local Action, Delegation, and Run Once
+
+#### Local Action
+```yaml
+- name: Run locally
+  local_action: echo "Running on the local machine"
+```
+
+Local actions run commands on the local machine rather than on the remote hosts.
+
+#### Delegate To
+```yaml
+- name: Run on specific host
+  command: echo "Running delegated command"
+  delegate_to: db-server
+  
+- name: Run locally with delegation
+  command: echo "Running locally via delegation"
+  delegate_to: localhost
+```
+
+The `delegate_to` option allows running a command on a specific host, rather than all hosts in the inventory or group.
+
+#### Run Once
+```yaml
+- name: Database schema update
+  command: ./update-schema.sh
+  run_once: true
+  
+- name: Local notification
+  local_action: ./send-notification.sh "Deployment started"
+  run_once: true
+```
+
+The `run_once` flag ensures a task is only executed once, even if multiple hosts are targeted. This is particularly useful for database migrations, notifications, or other actions that should happen only once during a playbook run.
+
+These features can be combined:
+```yaml
+- name: Initialize application
+  command: ./init-app.sh
+  delegate_to: app-primary
+  run_once: true
 ```
 
 ## Examples
@@ -486,7 +530,7 @@ tasks:
     
   - name: Backup database
     command: pg_dump mydb > /backup/mydb.sql
-    when: "{{ .role }} == 'primary'"
+    when: "{{ .role }} == primary"
     sudo: true
     
   - name: Update application
@@ -507,6 +551,7 @@ tasks:
     retries: 10
     retry_delay: 3
 ```
+{% endraw %}
 
 ## Troubleshooting
 

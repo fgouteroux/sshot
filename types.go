@@ -8,6 +8,13 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+var runOnceTasks = struct {
+	sync.RWMutex
+	executed map[string]bool
+}{
+	executed: make(map[string]bool),
+}
+
 type Config struct {
 	Inventory Inventory `yaml:"inventory"`
 	Playbook  Playbook  `yaml:"playbook"`
@@ -89,6 +96,9 @@ type Task struct {
 	Sudo             bool              `yaml:"sudo,omitempty"`
 	When             string            `yaml:"when,omitempty"`
 	Register         string            `yaml:"register,omitempty"`
+	LocalAction      string            `yaml:"local_action,omitempty"`
+	DelegateTo       string            `yaml:"delegate_to,omitempty"`
+	RunOnce          bool              `yaml:"run_once,omitempty"`
 	IgnoreError      bool              `yaml:"ignore_error,omitempty"`
 	Vars             map[string]string `yaml:"vars,omitempty"`
 	DependsOn        []string          `yaml:"depends_on,omitempty"`

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -20,6 +21,45 @@ func (e *Executor) ExecuteTask(task Task) error {
 	writer := e.outputWriter
 	if writer == nil {
 		writer = os.Stdout
+	}
+
+	// Check for delegation - if this task is delegated to a different host,
+	// skip it unless we're the delegated host
+	if task.DelegateTo != "" && task.DelegateTo != e.host.Name && task.DelegateTo != "localhost" {
+		e.mu.Lock()
+		fmt.Fprintf(writer, "  ↷ Skipped (delegated to: %s)\n", task.DelegateTo)
+		e.completedTasks[task.Name] = true
+		e.mu.Unlock()
+		return nil
+	}
+
+	// If task is delegated to localhost, treat it as a local_action
+	if task.DelegateTo == "localhost" && task.Command != "" {
+		// Convert to local_action if delegated to localhost
+		task.LocalAction = task.Command
+		task.Command = ""
+	}
+
+	// Check if this is a run_once task that's already been executed
+	if task.RunOnce {
+		taskKey := task.Name
+		runOnceTasks.RLock()
+		executed := runOnceTasks.executed[taskKey]
+		runOnceTasks.RUnlock()
+
+		if executed {
+			e.mu.Lock()
+			fmt.Fprintf(writer, "  ↷ Skipped (run_once already executed)\n")
+			e.completedTasks[task.Name] = true
+			e.mu.Unlock()
+			return nil
+		}
+
+		// Mark as executed after checking but before actually running
+		// to prevent race conditions in parallel execution
+		runOnceTasks.Lock()
+		runOnceTasks.executed[taskKey] = true
+		runOnceTasks.Unlock()
 	}
 
 	if execOptions.Verbose {
@@ -67,13 +107,34 @@ func (e *Executor) ExecuteTask(task Task) error {
 	if execOptions.DryRun {
 		e.mu.Lock()
 		fmt.Fprintf(writer, "  🔍 DRY-RUN: Would execute\n")
+
+		// Special handling for delegation
+		if task.DelegateTo != "" && task.DelegateTo != e.host.Name && task.DelegateTo != "localhost" {
+			fmt.Fprintf(writer, "      Command: %s\n", e.substituteVars(task.Command))
+			fmt.Fprintf(writer, "      (would be skipped, delegated to: %s)\n", task.DelegateTo)
+			e.completedTasks[task.Name] = true
+			e.mu.Unlock()
+			return nil
+		}
+
 		switch {
+		case task.Command != "" && task.DelegateTo != "":
+			fmt.Fprintf(writer, "      Command: %s (delegated to: %s)\n",
+				e.substituteVars(task.Command), task.DelegateTo)
+			if task.RunOnce {
+				fmt.Fprintf(writer, "      (run once)\n")
+			}
 		case task.Command != "":
 			fmt.Fprintf(writer, "      Command: %s\n", e.substituteVars(task.Command))
 		case task.Shell != "":
 			fmt.Fprintf(writer, "      Shell: %s\n", e.substituteVars(task.Shell))
 		case task.Script != "":
 			fmt.Fprintf(writer, "      Script: %s\n", task.Script)
+		case task.LocalAction != "":
+			fmt.Fprintf(writer, "      Local Action: %s\n", e.substituteVars(task.LocalAction))
+			if task.RunOnce {
+				fmt.Fprintf(writer, "      (run once)\n")
+			}
 		case task.Copy != nil:
 			fmt.Fprintf(writer, "      Copy: %s → %s\n", task.Copy.Src, e.substituteVars(task.Copy.Dest))
 		}
@@ -176,6 +237,54 @@ func (e *Executor) ExecuteTask(task Task) error {
 			}
 		case task.Script != "":
 			output, err = e.executeScript(task.Script, task.Sudo)
+			// Check if the exit code is allowed
+			if err != nil && len(task.AllowedExitCodes) > 0 {
+				if execOptions.Verbose {
+					e.mu.Lock()
+					log.SetOutput(writer)
+					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.host.Name, err)
+					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.host.Name, task.AllowedExitCodes)
+					log.SetOutput(os.Stderr)
+					e.mu.Unlock()
+				}
+
+				if e.isAllowedExitCode(err, task.AllowedExitCodes) {
+					if execOptions.Verbose {
+						e.mu.Lock()
+						log.SetOutput(writer)
+						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.host.Name)
+						log.SetOutput(os.Stderr)
+						e.mu.Unlock()
+					}
+					err = nil
+				}
+			}
+		case task.LocalAction != "":
+			output, err = e.executeLocalAction(task.LocalAction)
+			// Check if the exit code is allowed
+			if err != nil && len(task.AllowedExitCodes) > 0 {
+				if execOptions.Verbose {
+					e.mu.Lock()
+					log.SetOutput(writer)
+					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.host.Name, err)
+					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.host.Name, task.AllowedExitCodes)
+					log.SetOutput(os.Stderr)
+					e.mu.Unlock()
+				}
+
+				if e.isAllowedExitCode(err, task.AllowedExitCodes) {
+					if execOptions.Verbose {
+						e.mu.Lock()
+						log.SetOutput(writer)
+						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.host.Name)
+						log.SetOutput(os.Stderr)
+						e.mu.Unlock()
+					}
+					err = nil
+				}
+			}
+		case task.Command != "" && task.DelegateTo != "":
+			output, err = e.executeDelegated(task.Command, task.DelegateTo)
 			// Check if the exit code is allowed
 			if err != nil && len(task.AllowedExitCodes) > 0 {
 				if execOptions.Verbose {
@@ -740,4 +849,59 @@ func (e *Executor) printOutput(writer io.Writer, output string) {
 			}
 		}
 	}
+}
+
+func (e *Executor) executeLocalAction(cmd string) (string, error) {
+	cmd = e.substituteVars(cmd)
+
+	if execOptions.Verbose {
+		e.mu.Lock()
+		log.SetOutput(e.outputWriter)
+		log.Printf("[VERBOSE] [%s] Executing locally: %s", e.host.Name, cmd)
+		log.SetOutput(os.Stderr)
+		e.mu.Unlock()
+	}
+
+	// Create command
+	parts := strings.Fields(cmd)
+	if len(parts) == 0 {
+		return "", fmt.Errorf("empty command")
+	}
+
+	command := exec.Command(parts[0], parts[1:]...)
+
+	// Capture output
+	var stdout, stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+
+	err := command.Run()
+	output := stdout.String()
+	if stderr.Len() > 0 {
+		output += "\nSTDERR: " + stderr.String()
+	}
+
+	if err != nil {
+		return output, fmt.Errorf("local command failed: %w", err)
+	}
+
+	return output, nil
+}
+
+func (e *Executor) executeDelegated(cmd string, delegateHost string) (string, error) {
+	// If delegated to localhost, just run it locally
+	if delegateHost == "localhost" || delegateHost == "127.0.0.1" {
+		return e.executeLocalAction(cmd)
+	}
+
+	// Otherwise, for delegation to happen correctly, the task has to be
+	// executed by the proper host's executor. This function should never
+	// actually be called since we filter at a higher level.
+	return "", fmt.Errorf("delegation to %s should be handled by skipping execution on non-delegate hosts", delegateHost)
+}
+
+func ResetRunOnceTracking() {
+	runOnceTasks.Lock()
+	runOnceTasks.executed = make(map[string]bool)
+	runOnceTasks.Unlock()
 }

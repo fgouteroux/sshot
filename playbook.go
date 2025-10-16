@@ -225,6 +225,11 @@ func printPlaybookSummary(results []HostResult, totalDuration time.Duration, err
 func RunPlaybook(playbookPath string) error {
 	playbookStart := time.Now()
 
+	// Reset the run_once tracking
+	runOnceTasks.Lock()
+	runOnceTasks.executed = make(map[string]bool)
+	runOnceTasks.Unlock()
+
 	// Load config (either separate or combined files)
 	config, err := loadConfig(playbookPath, execOptions.InventoryFile)
 	if err != nil {
