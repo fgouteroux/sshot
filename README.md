@@ -313,6 +313,7 @@ tasks:
     when: "{{ .env }} == production"
     register: deploy_output
 ```
+{% endraw %}
 
 ## Task Reference
 
@@ -330,17 +331,21 @@ tasks:
 ```
 
 ### Task with Variables
+{% raw %}
 ```yaml
 - name: Deploy application
   command: deploy {{ .app_name }} --port {{ .app_port }}
 ```
+{% endraw %}
 
 ### Task with Conditionals
+{% raw %}
 ```yaml
 - name: Ubuntu specific
   command: apt-get update
   when: "{{ .os }} == ubuntu"
 ```
+{% endraw %}
 
 ### Task with Retries
 ```yaml
@@ -485,6 +490,7 @@ tasks:
 ```
 
 ### Multi-tier Application
+{% raw %}
 ```yaml
 # inventory.yml
 ssh_config:
