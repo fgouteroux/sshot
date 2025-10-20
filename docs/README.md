@@ -472,6 +472,236 @@ tasks:                              # List of tasks
 
 ## Advanced Features
 
+### Facts Collection in SSHOT
+
+#### Overview
+
+The facts collection feature allows you to gather system information from remote hosts before executing tasks. This information (facts) can then be used in your tasks for conditional execution or dynamic command generation, similar to Ansible facts.
+
+Facts are collected using configurable commands that output JSON data. By default, you can use tools like Puppet's Facter to gather detailed system information.
+
+#### Configuration
+
+Facts collection is configured in the `facts` section of your playbook:
+```yaml
+playbook:
+  name: My Playbook
+  facts:
+    collectors:
+      - name: puppet_facts
+        command: facter --json
+        sudo: true
+      - name: app_status
+        command: /usr/local/bin/app-status.sh --json
+        sudo: false
+  tasks:
+    - name: OS-specific Task
+      command: echo "Running on {{.puppet_facts.os.name}}"
+      when: "{{.puppet_facts.os.family}} == RedHat"
+```
+
+#### Collector Configuration
+
+Each collector is defined with the following properties:
+
+| Property | Description | Required |
+|----------|-------------|----------|
+| `name` | Name of the fact collection, used to access the facts | Yes |
+| `command` | Command to execute that returns JSON data | Yes |
+| `sudo` | Whether to run the command with sudo | No (default: false) |
+
+#### Using Facts in Tasks
+
+Facts are available as variables in your tasks, using the collector name as the prefix:
+
+##### Basic Usage
+```yaml
+- name: Show OS Information
+  command: echo "Running on {{.puppet_facts.os.name}} {{.puppet_facts.os.release.full}}"
+```
+
+##### Conditional Execution
+```yaml
+- name: Debian-specific Task
+  command: apt-get update
+  when: "{{.puppet_facts.os.family}} == Debian"
+  
+- name: RedHat-specific Task
+  command: yum update
+  when: "{{.puppet_facts.os.family}} == RedHat"
+```
+
+##### Nested Facts
+
+Facts can have nested structures, which can be accessed using dot notation:
+```yaml
+- name: Show Memory Information
+  command: echo "Total memory: {{.puppet_facts.memory.system.total}}"
+```
+
+#### Using Puppet Facter
+
+[Facter](https://puppet.com/docs/puppet/latest/facter.html) is a system profiling library from Puppet that collects facts about the system it runs on. It's an excellent tool for gathering comprehensive system information.
+
+##### Installing Facter
+
+If you're not using the full Puppet agent, you can install just Facter:
+
+###### On Debian/Ubuntu:
+```bash
+sudo apt-get install facter
+```
+
+###### On RedHat/CentOS:
+```bash
+sudo yum install facter
+```
+
+##### Standalone Installation:
+```bash
+# Download and install Puppet's release package
+wget https://apt.puppetlabs.com/puppet7-release-focal.deb
+sudo dpkg -i puppet7-release-focal.deb
+sudo apt-get update
+sudo apt-get install facter
+```
+
+### Using Facter with SSHOT
+
+Once Facter is installed, you can use it in your facts collectors:
+```yaml
+facts:
+  collectors:
+    - name: system_facts
+      command: /opt/puppetlabs/bin/facter --json
+      sudo: true
+```
+
+Note that Facter is typically installed at `facter`. You may need to specify the full path when using sudo, as shown above.
+
+#### Custom Fact Collectors
+
+You can create your own custom fact collectors by writing scripts that output JSON data:
+
+#### Example: Custom Application Status Collector
+
+Create a script that outputs JSON:
+```bash
+#!/bin/bash
+# /usr/local/bin/app-status.sh
+echo '{'
+echo '  "version": "1.2.3",'
+echo '  "status": "running",'
+echo '  "connections": 42,'
+echo '  "uptime": "3d 2h 15m"'
+echo '}'
+```
+
+Then use it in your playbook:
+```yaml
+facts:
+  collectors:
+    - name: app_status
+      command: /usr/local/bin/app-status.sh
+      sudo: false
+```
+
+Access the facts in your tasks:
+```yaml
+- name: Show Application Status
+  command: echo "App version {{.app_status.version}} is {{.app_status.status}}"
+  
+- name: Restart if Connections Too High
+  command: systemctl restart myapp
+  when: "{{.app_status.connections}} > 100"
+```
+
+#### Troubleshooting
+
+##### Command Not Found
+
+If you get a "command not found" error when using Facter with sudo, make sure to use the full path to the Facter executable:
+```yaml
+command: facter --json
+```
+
+##### JSON Parsing Errors
+
+The output of your collector commands must be valid JSON. If you're creating a custom collector script, make sure it outputs properly formatted JSON.
+
+To test your JSON output:
+```bash
+/usr/local/bin/my-collector.sh | jq
+```
+
+If jq reports errors, your JSON is not valid.
+
+##### Accessing Facts in Templates
+
+If you have complex nested facts, you can use the dot notation to access nested values:
+```
+{{.puppet_facts.networking.interfaces.eth0.ip}}
+```
+
+#### Examples
+
+##### Basic System Information Playbook
+```yaml
+inventory:
+  ssh_config:
+    user: admin
+    key_file: ~/.ssh/id_rsa
+  hosts:
+    - name: server1
+      address: 192.168.1.10
+      
+playbook:
+  name: System Information
+  facts:
+    collectors:
+      - name: system
+        command: facter --json
+        sudo: true
+  tasks:
+    - name: Show System Information
+      command: echo "Host: {{.system.networking.hostname}}, OS: {{.system.os.name}} {{.system.os.release.full}}, CPU: {{.system.processors.models.0}}, RAM: {{.system.memory.system.total}}"
+```
+
+##### OS-Specific Deployment
+```yaml
+inventory:
+  ssh_config:
+    user: deploy
+    key_file: ~/.ssh/deploy_key
+  hosts:
+    - name: web1
+      address: 192.168.1.10
+    - name: web2
+      address: 192.168.1.11
+      
+playbook:
+  name: Deploy Application
+  facts:
+    collectors:
+      - name: os_info
+        command: facter --json os
+        sudo: false
+  tasks:
+    - name: Install Dependencies (Debian)
+      command: apt-get install -y nginx nodejs
+      sudo: true
+      when: "{{.os_info.os.family}} == Debian"
+      
+    - name: Install Dependencies (RedHat)
+      command: yum install -y nginx nodejs
+      sudo: true
+      when: "{{.os_info.os.family}} == RedHat"
+      
+    - name: Deploy Application
+      command: /usr/local/bin/deploy.sh
+      sudo: true
+```
+
 ### Variable Substitution
 
 SSHOT supports variable substitution in commands, scripts, and file content:

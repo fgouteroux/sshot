@@ -40,6 +40,18 @@ func executeOnHost(host Host, tasks []Task, captureOutput bool) HostResult {
 		executor.outputWriter = writer
 	}
 
+	// Collect facts if collectors are configured
+	if globalConfig, ok := configCache.Get(); ok && len(globalConfig.Playbook.Facts.Collectors) > 0 {
+		fmt.Fprintf(writer, "%s│%s Gathering system facts...\n", color(ColorCyan), color(ColorReset))
+		if err := executor.CollectFacts(globalConfig.Playbook.Facts); err != nil {
+			if execOptions.Verbose {
+				fmt.Fprintf(writer, "  %s✗%s Facts collection failed: %v\n",
+					color(ColorRed), color(ColorReset), err)
+			}
+			return HostResult{Host: host, Success: false, Error: err, Output: output.String()}
+		}
+	}
+
 	for i, task := range tasks {
 		taskStart := time.Now()
 		fmt.Fprintf(writer, "%s│%s [%d/%d] %s\n", color(ColorCyan), color(ColorReset), i+1, len(tasks), task.Name)
@@ -115,6 +127,9 @@ func executeHostsSequential(hosts []Host, tasks []Task) []HostResult {
 }
 
 func executeWithGroups(config Config) ([]HostResult, error) {
+	// Store the config in the cache if not already set
+	configCache.Set(&config)
+
 	groups := config.Inventory.Groups
 
 	sortedGroups := make([]Group, len(groups))
@@ -235,6 +250,9 @@ func RunPlaybook(playbookPath string) error {
 	if err != nil {
 		return err
 	}
+
+	// Store the config in the cache for global access
+	configCache.Set(config)
 
 	// Apply SSH defaults to hosts
 	applySSHDefaults(config)

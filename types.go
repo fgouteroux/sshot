@@ -27,11 +27,22 @@ type InventoryConfig struct {
 	SSHConfig *SSHConfig `yaml:"ssh_config,omitempty"`
 }
 
+type FactCollector struct {
+	Name    string `yaml:"name"`
+	Command string `yaml:"command"`
+	Sudo    bool   `yaml:"sudo,omitempty"`
+}
+
+type FactsConfig struct {
+	Collectors []FactCollector `yaml:"collectors,omitempty"`
+}
+
 // PlaybookConfig represents a standalone playbook file
 type PlaybookConfig struct {
-	Name     string `yaml:"name"`
-	Parallel bool   `yaml:"parallel,omitempty"`
-	Tasks    []Task `yaml:"tasks"`
+	Name     string      `yaml:"name"`
+	Parallel bool        `yaml:"parallel,omitempty"`
+	Facts    FactsConfig `yaml:"facts,omitempty"`
+	Tasks    []Task      `yaml:"tasks"`
 }
 
 type ExecutionOptions struct {
@@ -68,46 +79,47 @@ type Group struct {
 }
 
 type Host struct {
-	Name               string            `yaml:"name"`
-	Address            string            `yaml:"address,omitempty"`
-	Hostname           string            `yaml:"hostname,omitempty"`
-	Port               int               `yaml:"port"`
-	User               string            `yaml:"user"`
-	Password           string            `yaml:"password,omitempty"`
-	KeyFile            string            `yaml:"key_file,omitempty"`
-	KeyPassword        string            `yaml:"key_password,omitempty"`
-	UseAgent           bool              `yaml:"use_agent,omitempty"`
-	StrictHostKeyCheck *bool             `yaml:"strict_host_key_check,omitempty"`
-	Vars               map[string]string `yaml:"vars,omitempty"`
+	Name               string                 `yaml:"name"`
+	Address            string                 `yaml:"address,omitempty"`
+	Hostname           string                 `yaml:"hostname,omitempty"`
+	Port               int                    `yaml:"port"`
+	User               string                 `yaml:"user"`
+	Password           string                 `yaml:"password,omitempty"`
+	KeyFile            string                 `yaml:"key_file,omitempty"`
+	KeyPassword        string                 `yaml:"key_password,omitempty"`
+	UseAgent           bool                   `yaml:"use_agent,omitempty"`
+	StrictHostKeyCheck *bool                  `yaml:"strict_host_key_check,omitempty"`
+	Vars               map[string]interface{} `yaml:"vars,omitempty"`
 }
 
 type Playbook struct {
-	Name     string `yaml:"name"`
-	Parallel bool   `yaml:"parallel,omitempty"`
-	Tasks    []Task `yaml:"tasks"`
+	Name     string      `yaml:"name"`
+	Parallel bool        `yaml:"parallel,omitempty"`
+	Facts    FactsConfig `yaml:"facts,omitempty"`
+	Tasks    []Task      `yaml:"tasks"`
 }
 
 type Task struct {
-	Name             string            `yaml:"name"`
-	Command          string            `yaml:"command,omitempty"`
-	Script           string            `yaml:"script,omitempty"`
-	Copy             *CopyTask         `yaml:"copy,omitempty"`
-	Shell            string            `yaml:"shell,omitempty"`
-	Sudo             bool              `yaml:"sudo,omitempty"`
-	When             string            `yaml:"when,omitempty"`
-	Register         string            `yaml:"register,omitempty"`
-	LocalAction      string            `yaml:"local_action,omitempty"`
-	DelegateTo       string            `yaml:"delegate_to,omitempty"`
-	RunOnce          bool              `yaml:"run_once,omitempty"`
-	IgnoreError      bool              `yaml:"ignore_error,omitempty"`
-	Vars             map[string]string `yaml:"vars,omitempty"`
-	DependsOn        []string          `yaml:"depends_on,omitempty"`
-	WaitFor          string            `yaml:"wait_for,omitempty"`
-	Retries          int               `yaml:"retries,omitempty"`
-	RetryDelay       int               `yaml:"retry_delay,omitempty"`
-	Timeout          int               `yaml:"timeout,omitempty"`
-	UntilSuccess     bool              `yaml:"until_success,omitempty"`
-	AllowedExitCodes []int             `yaml:"allowed_exit_codes,omitempty"`
+	Name             string                 `yaml:"name"`
+	Command          string                 `yaml:"command,omitempty"`
+	Script           string                 `yaml:"script,omitempty"`
+	Copy             *CopyTask              `yaml:"copy,omitempty"`
+	Shell            string                 `yaml:"shell,omitempty"`
+	Sudo             bool                   `yaml:"sudo,omitempty"`
+	When             string                 `yaml:"when,omitempty"`
+	Register         string                 `yaml:"register,omitempty"`
+	LocalAction      string                 `yaml:"local_action,omitempty"`
+	DelegateTo       string                 `yaml:"delegate_to,omitempty"`
+	RunOnce          bool                   `yaml:"run_once,omitempty"`
+	IgnoreError      bool                   `yaml:"ignore_error,omitempty"`
+	Vars             map[string]interface{} `yaml:"vars,omitempty"`
+	DependsOn        []string               `yaml:"depends_on,omitempty"`
+	WaitFor          string                 `yaml:"wait_for,omitempty"`
+	Retries          int                    `yaml:"retries,omitempty"`
+	RetryDelay       int                    `yaml:"retry_delay,omitempty"`
+	Timeout          int                    `yaml:"timeout,omitempty"`
+	UntilSuccess     bool                   `yaml:"until_success,omitempty"`
+	AllowedExitCodes []int                  `yaml:"allowed_exit_codes,omitempty"`
 }
 
 type CopyTask struct {
@@ -119,7 +131,7 @@ type CopyTask struct {
 type Executor struct {
 	host           Host
 	client         *ssh.Client
-	variables      map[string]string
+	variables      map[string]interface{}
 	registers      map[string]string
 	completedTasks map[string]bool
 	mu             sync.Mutex

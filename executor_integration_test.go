@@ -20,7 +20,7 @@ func TestExecutor_ExecuteCopyTaskDryRun(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -65,7 +65,7 @@ func TestExecutor_ExecuteScriptTaskDryRun(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -99,7 +99,7 @@ func TestExecutor_ExecuteWaitForTaskDryRun(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -127,7 +127,7 @@ func TestExecutor_ExecuteTaskWithRetries(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -157,7 +157,7 @@ func TestExecutor_ExecuteTaskWithTimeout(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -186,7 +186,7 @@ func TestExecutor_ExecuteTaskUntilSuccess(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -215,7 +215,7 @@ func TestExecutor_ExecuteTaskWithRegister(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -248,7 +248,7 @@ func TestExecutor_ExecuteTaskIgnoreError(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -274,7 +274,7 @@ func TestExecutor_ExecuteTaskIgnoreError(t *testing.T) {
 
 func TestExecutor_SubstituteVarsInvalidTemplate(t *testing.T) {
 	executor := &Executor{
-		variables: map[string]string{
+		variables: map[string]interface{}{
 			"var": "value",
 		},
 	}
@@ -287,7 +287,7 @@ func TestExecutor_SubstituteVarsInvalidTemplate(t *testing.T) {
 
 func TestExecutor_EvaluateConditionComplexEquals(t *testing.T) {
 	executor := &Executor{
-		variables: map[string]string{
+		variables: map[string]interface{}{
 			"status": "active",
 			"count":  "5",
 		},
@@ -348,7 +348,7 @@ func TestExecutor_ExecuteTaskVerbose(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -357,7 +357,7 @@ func TestExecutor_ExecuteTaskVerbose(t *testing.T) {
 	task := Task{
 		Name:    "Verbose Task",
 		Command: "echo test",
-		Vars: map[string]string{
+		Vars: map[string]interface{}{
 			"test": "value",
 		},
 	}
@@ -379,7 +379,7 @@ func TestExecutor_ExecuteTaskMultipleDependencies(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -411,7 +411,7 @@ func TestExecutor_ExecuteTaskPartialDependencies(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -438,11 +438,11 @@ func TestExecutor_InitialState(t *testing.T) {
 	executor := &Executor{
 		host: Host{
 			Name: "testhost",
-			Vars: map[string]string{
+			Vars: map[string]interface{}{
 				"host_var": "host_value",
 			},
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		startTime:      time.Now(),
@@ -509,7 +509,7 @@ func TestExecutor_ExecuteTaskAllTypes(t *testing.T) {
 			var output bytes.Buffer
 			executor := &Executor{
 				host:           Host{Name: "testhost"},
-				variables:      make(map[string]string),
+				variables:      make(map[string]interface{}),
 				registers:      make(map[string]string),
 				completedTasks: make(map[string]bool),
 				outputWriter:   &output,

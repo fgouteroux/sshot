@@ -52,7 +52,7 @@ func TestHost_Structure(t *testing.T) {
 		User:     "admin",
 		Password: "secret",
 		KeyFile:  "/path/to/key",
-		Vars: map[string]string{
+		Vars: map[string]interface{}{
 			"env": "production",
 		},
 	}
@@ -77,7 +77,7 @@ func TestTask_Structure(t *testing.T) {
 		Command: "apt-get install nginx",
 		Sudo:    true,
 		When:    "os == 'ubuntu'",
-		Vars: map[string]string{
+		Vars: map[string]interface{}{
 			"package": "nginx",
 		},
 		Retries:    3,

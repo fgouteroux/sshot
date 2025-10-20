@@ -8,7 +8,7 @@ import (
 
 func TestExecutor_SubstituteVars(t *testing.T) {
 	executor := &Executor{
-		variables: map[string]string{
+		variables: map[string]interface{}{
 			"username": "admin",
 			"port":     "8080",
 			"path":     "/var/log",
@@ -54,7 +54,7 @@ func TestExecutor_SubstituteVars(t *testing.T) {
 
 func TestExecutor_EvaluateCondition(t *testing.T) {
 	executor := &Executor{
-		variables: map[string]string{
+		variables: map[string]interface{}{
 			"os":      "ubuntu",
 			"version": "20.04",
 			"defined": "value",
@@ -125,7 +125,7 @@ func TestExecutor_ExecuteTaskDryRun(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -203,7 +203,7 @@ func TestExecutor_ExecuteTaskWithCondition(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables: map[string]string{
+		variables: map[string]interface{}{
 			"os": "ubuntu",
 		},
 		registers:      make(map[string]string),
@@ -269,7 +269,7 @@ func TestExecutor_ExecuteTaskWithDependencies(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -323,7 +323,7 @@ func TestExecutor_ExecuteTaskWithVars(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &bytes.Buffer{},
@@ -332,7 +332,7 @@ func TestExecutor_ExecuteTaskWithVars(t *testing.T) {
 	task := Task{
 		Name:    "Task with vars",
 		Command: "echo test",
-		Vars: map[string]string{
+		Vars: map[string]interface{}{
 			"new_var": "new_value",
 			"key":     "value",
 		},
@@ -361,7 +361,7 @@ func TestExecutor_ExecuteTaskNoType(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &bytes.Buffer{},
@@ -392,7 +392,7 @@ func TestExecutor_ExecuteLocalActionDryRun(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -427,7 +427,7 @@ func TestExecutor_RunOnceAndDelegation(t *testing.T) {
 		host: Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output,
@@ -504,7 +504,7 @@ func TestExecutor_DelegateTo(t *testing.T) {
 
 	executor1 := &Executor{
 		host:           host1,
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output1,
@@ -512,7 +512,7 @@ func TestExecutor_DelegateTo(t *testing.T) {
 
 	executor2 := &Executor{
 		host:           host2,
-		variables:      make(map[string]string),
+		variables:      make(map[string]interface{}),
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
 		outputWriter:   &output2,

@@ -128,7 +128,7 @@ func NewExecutor(host Host) (*Executor, error) {
 		if execOptions.Verbose {
 			log.Printf("[VERBOSE] [%s] DRY-RUN: Skipping actual SSH connection", host.Name)
 		}
-		vars := make(map[string]string)
+		vars := make(map[string]interface{})
 		if host.Vars != nil {
 			for k, v := range host.Vars {
 				vars[k] = v
