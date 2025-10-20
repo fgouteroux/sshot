@@ -198,7 +198,7 @@ func TestExecuteHostsSequential(t *testing.T) {
 		{Name: "Task1", Command: "echo test"},
 	}
 
-	results := executeHostsSequential(hosts, tasks)
+	results := executeHostsSequential(hosts, tasks, "")
 
 	if len(results) != 2 {
 		t.Errorf("Expected 2 results, got %d", len(results))
@@ -229,7 +229,7 @@ func TestExecuteHostsParallel(t *testing.T) {
 		{Name: "Task2", Command: "echo test2"},
 	}
 
-	results := executeHostsParallel(hosts, tasks)
+	results := executeHostsParallel(hosts, tasks, "")
 
 	if len(results) != 3 {
 		t.Errorf("Expected 3 results, got %d", len(results))
@@ -261,7 +261,7 @@ func TestExecuteOnHost_DryRun(t *testing.T) {
 		{Name: "Task2", Command: "echo world"},
 	}
 
-	result := executeOnHost(host, tasks, false)
+	result := executeOnHost(host, tasks, false, "")
 
 	if !result.Success {
 		t.Errorf("executeOnHost should succeed in dry-run, got error: %v", result.Error)

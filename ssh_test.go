@@ -69,7 +69,7 @@ func TestNewExecutor_DryRun(t *testing.T) {
 		Port:     22,
 	}
 
-	executor, err := NewExecutor(host)
+	executor, err := NewExecutor(host, "")
 	if err != nil {
 		t.Fatalf("NewExecutor failed in dry-run: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestNewExecutor_NoAddress(t *testing.T) {
 		// No address or hostname
 	}
 
-	_, err := NewExecutor(host)
+	_, err := NewExecutor(host, "")
 	if err == nil {
 		t.Error("NewExecutor should fail with no address")
 	}
@@ -144,7 +144,7 @@ func TestNewExecutor_NoAuthMethod(t *testing.T) {
 		// No password, key file, or agent
 	}
 
-	_, err := NewExecutor(host)
+	_, err := NewExecutor(host, "")
 	if err == nil {
 		t.Error("NewExecutor should fail with no auth method")
 	}
@@ -164,7 +164,7 @@ func TestNewExecutor_WithPassword(t *testing.T) {
 		Password: "testpass",
 	}
 
-	executor, err := NewExecutor(host)
+	executor, err := NewExecutor(host, "")
 	if err != nil {
 		t.Fatalf("NewExecutor with password failed: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestNewExecutor_UseAgentEnabled(t *testing.T) {
 	}
 
 	// This should fail because use_agent is true but no agent is available
-	_, err := NewExecutor(host)
+	_, err := NewExecutor(host, "")
 	if err == nil {
 		t.Error("NewExecutor should fail when use_agent is true but no agent available")
 	}
@@ -220,7 +220,7 @@ func TestNewExecutor_HostnameInsteadOfAddress(t *testing.T) {
 		Password: "testpass",
 	}
 
-	executor, err := NewExecutor(host)
+	executor, err := NewExecutor(host, "")
 	if err != nil {
 		t.Fatalf("NewExecutor with hostname failed: %v", err)
 	}

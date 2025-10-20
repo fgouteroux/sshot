@@ -14,7 +14,7 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
-func NewExecutor(host Host) (*Executor, error) {
+func NewExecutor(host Host, groupName string) (*Executor, error) {
 	if execOptions.Verbose {
 		log.Printf("[VERBOSE] Connecting to host: %s", host.Name)
 	}
@@ -141,6 +141,7 @@ func NewExecutor(host Host) (*Executor, error) {
 			variables:      vars,
 			registers:      make(map[string]string),
 			completedTasks: make(map[string]bool),
+			groupName:      groupName,
 			outputWriter:   os.Stdout,
 			startTime:      time.Now(),
 		}, nil
@@ -161,6 +162,7 @@ func NewExecutor(host Host) (*Executor, error) {
 		variables:      host.Vars,
 		registers:      make(map[string]string),
 		completedTasks: make(map[string]bool),
+		groupName:      groupName,
 		outputWriter:   os.Stdout,
 		startTime:      time.Now(),
 	}, nil

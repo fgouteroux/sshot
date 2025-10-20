@@ -126,6 +126,41 @@ func (e *Executor) ExecuteTask(task Task) error {
 		writer = os.Stdout
 	}
 
+	if execOptions.Verbose {
+		e.mu.Lock()
+		log.SetOutput(writer)
+		log.Printf("[VERBOSE] [%s] Executing task: %s", e.host.Name, task.Name)
+		log.SetOutput(os.Stderr)
+		e.mu.Unlock()
+	}
+
+	// Check if task is restricted to specific groups
+	if len(task.OnlyGroups) > 0 {
+		groupAllowed := false
+		for _, group := range task.OnlyGroups {
+			if group == e.groupName {
+				groupAllowed = true
+				break
+			}
+		}
+		if !groupAllowed {
+			// Skip task, not in allowed groups
+			fmt.Fprintf(writer, "  ⊘ Skipped (not in allowed groups: %v)\n", task.OnlyGroups)
+			return nil
+		}
+	}
+
+	// Check if task should skip specific groups
+	if len(task.SkipGroups) > 0 {
+		for _, group := range task.SkipGroups {
+			if group == e.groupName {
+				// Skip task, in excluded group
+				fmt.Fprintf(writer, "  ⊘ Skipped (in excluded group: %s)\n", group)
+				return nil
+			}
+		}
+	}
+
 	// Check for delegation - if this task is delegated to a different host,
 	// skip it unless we're the delegated host
 	if task.DelegateTo != "" && task.DelegateTo != e.host.Name && task.DelegateTo != "localhost" {
@@ -163,14 +198,6 @@ func (e *Executor) ExecuteTask(task Task) error {
 		runOnceTasks.Lock()
 		runOnceTasks.executed[taskKey] = true
 		runOnceTasks.Unlock()
-	}
-
-	if execOptions.Verbose {
-		e.mu.Lock()
-		log.SetOutput(writer)
-		log.Printf("[VERBOSE] [%s] Executing task: %s", e.host.Name, task.Name)
-		log.SetOutput(os.Stderr)
-		e.mu.Unlock()
 	}
 
 	if len(task.DependsOn) > 0 {

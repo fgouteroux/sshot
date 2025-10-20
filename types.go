@@ -108,6 +108,8 @@ type Task struct {
 	Sudo             bool                   `yaml:"sudo,omitempty"`
 	When             string                 `yaml:"when,omitempty"`
 	Register         string                 `yaml:"register,omitempty"`
+	OnlyGroups       []string               `yaml:"only_groups,omitempty"`
+	SkipGroups       []string               `yaml:"skip_groups,omitempty"`
 	LocalAction      string                 `yaml:"local_action,omitempty"`
 	DelegateTo       string                 `yaml:"delegate_to,omitempty"`
 	RunOnce          bool                   `yaml:"run_once,omitempty"`
@@ -134,6 +136,7 @@ type Executor struct {
 	variables      map[string]interface{}
 	registers      map[string]string
 	completedTasks map[string]bool
+	groupName      string
 	mu             sync.Mutex
 	outputWriter   io.Writer
 	startTime      time.Time

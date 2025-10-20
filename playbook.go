@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func executeOnHost(host Host, tasks []Task, captureOutput bool) HostResult {
+func executeOnHost(host Host, tasks []Task, captureOutput bool, groupName string) HostResult {
 	var output bytes.Buffer
 	var writer io.Writer = os.Stdout
 
@@ -28,7 +28,7 @@ func executeOnHost(host Host, tasks []Task, captureOutput bool) HostResult {
 	fmt.Fprintf(writer, "%s┌─ Host: %s%s%s (%s)\n", color(ColorCyan), color(ColorBold), host.Name, color(ColorReset), displayTarget)
 	fmt.Fprintf(writer, "%s│%s\n", color(ColorCyan), color(ColorReset))
 
-	executor, err := NewExecutor(host)
+	executor, err := NewExecutor(host, groupName)
 	if err != nil {
 		fmt.Fprintf(writer, "%s│%s %s✗ Connection failed:%s %v\n", color(ColorCyan), color(ColorReset), color(ColorRed), color(ColorReset), err)
 		fmt.Fprintf(writer, "%s└─ ✗ Connection Failed%s\n\n", color(ColorRed), color(ColorReset))
@@ -78,7 +78,7 @@ func executeOnHost(host Host, tasks []Task, captureOutput bool) HostResult {
 	return HostResult{Host: host, Success: true, Error: nil, Output: output.String()}
 }
 
-func executeHostsParallel(hosts []Host, tasks []Task) []HostResult {
+func executeHostsParallel(hosts []Host, tasks []Task, groupName string) []HostResult {
 	var wg sync.WaitGroup
 	resultsChan := make(chan HostResult, len(hosts))
 
@@ -86,7 +86,7 @@ func executeHostsParallel(hosts []Host, tasks []Task) []HostResult {
 		wg.Add(1)
 		go func(h Host) {
 			defer wg.Done()
-			result := executeOnHost(h, tasks, true)
+			result := executeOnHost(h, tasks, true, groupName)
 			resultsChan <- result
 		}(host)
 	}
@@ -111,11 +111,11 @@ func executeHostsParallel(hosts []Host, tasks []Task) []HostResult {
 	return results
 }
 
-func executeHostsSequential(hosts []Host, tasks []Task) []HostResult {
+func executeHostsSequential(hosts []Host, tasks []Task, groupName string) []HostResult {
 	var results []HostResult
 
 	for _, host := range hosts {
-		result := executeOnHost(host, tasks, false)
+		result := executeOnHost(host, tasks, false, groupName)
 		results = append(results, result)
 
 		if !result.Success {
@@ -172,9 +172,9 @@ func executeWithGroups(config Config) ([]HostResult, error) {
 		var groupResults []HostResult
 
 		if group.Parallel {
-			groupResults = executeHostsParallel(group.Hosts, config.Playbook.Tasks)
+			groupResults = executeHostsParallel(group.Hosts, config.Playbook.Tasks, group.Name)
 		} else {
-			groupResults = executeHostsSequential(group.Hosts, config.Playbook.Tasks)
+			groupResults = executeHostsSequential(group.Hosts, config.Playbook.Tasks, group.Name)
 		}
 
 		allResults = append(allResults, groupResults...)
@@ -286,9 +286,9 @@ func RunPlaybook(playbookPath string) error {
 		}
 	} else if len(config.Inventory.Hosts) > 0 {
 		if parallel {
-			results = executeHostsParallel(config.Inventory.Hosts, config.Playbook.Tasks)
+			results = executeHostsParallel(config.Inventory.Hosts, config.Playbook.Tasks, "")
 		} else {
-			results = executeHostsSequential(config.Inventory.Hosts, config.Playbook.Tasks)
+			results = executeHostsSequential(config.Inventory.Hosts, config.Playbook.Tasks, "")
 		}
 	} else {
 		return fmt.Errorf("no hosts or groups defined in inventory")

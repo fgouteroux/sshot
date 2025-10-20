@@ -496,8 +496,8 @@ playbook:
         sudo: false
   tasks:
     - name: OS-specific Task
-      command: echo "Running on {{.puppet_facts.os.name}}"
-      when: "{{.puppet_facts.os.family}} == RedHat"
+      command: echo "Running on {% raw %}{{.puppet_facts.os.name}}{% endraw %}"
+      when: "{% raw %}{{.puppet_facts.os.family}} == RedHat{% endraw %}"
 ```
 
 #### Collector Configuration
@@ -517,18 +517,18 @@ Facts are available as variables in your tasks, using the collector name as the 
 ##### Basic Usage
 ```yaml
 - name: Show OS Information
-  command: echo "Running on {{.puppet_facts.os.name}} {{.puppet_facts.os.release.full}}"
+  command: echo "Running on {% raw %}{{.puppet_facts.os.name}} {{.puppet_facts.os.release.full}}{% endraw %}"
 ```
 
 ##### Conditional Execution
 ```yaml
 - name: Debian-specific Task
   command: apt-get update
-  when: "{{.puppet_facts.os.family}} == Debian"
+  when: "{% raw %}{{.puppet_facts.os.family}} == Debian{% endraw %}"
   
 - name: RedHat-specific Task
   command: yum update
-  when: "{{.puppet_facts.os.family}} == RedHat"
+  when: "{% raw %}{{.puppet_facts.os.family}} == RedHat{% endraw %}"
 ```
 
 ##### Nested Facts
@@ -536,7 +536,7 @@ Facts are available as variables in your tasks, using the collector name as the 
 Facts can have nested structures, which can be accessed using dot notation:
 ```yaml
 - name: Show Memory Information
-  command: echo "Total memory: {{.puppet_facts.memory.system.total}}"
+  command: echo "Total memory: {% raw %}{{.puppet_facts.memory.system.total}}{% endraw %}"
 ```
 
 #### Using Puppet Facter
@@ -609,11 +609,11 @@ facts:
 Access the facts in your tasks:
 ```yaml
 - name: Show Application Status
-  command: echo "App version {{.app_status.version}} is {{.app_status.status}}"
+  command: echo "App version {% raw %}{{.app_status.version}} is {{.app_status.status}}{% endraw %}"
   
 - name: Restart if Connections Too High
   command: systemctl restart myapp
-  when: "{{.app_status.connections}} > 100"
+  when: "{% raw %}{{.app_status.connections}}{% endraw %} > 100"
 ```
 
 #### Troubleshooting
@@ -640,7 +640,7 @@ If jq reports errors, your JSON is not valid.
 
 If you have complex nested facts, you can use the dot notation to access nested values:
 ```
-{{.puppet_facts.networking.interfaces.eth0.ip}}
+{% raw %}{{.puppet_facts.networking.interfaces.eth0.ip}}{% endraw %}
 ```
 
 #### Examples
@@ -664,7 +664,7 @@ playbook:
         sudo: true
   tasks:
     - name: Show System Information
-      command: echo "Host: {{.system.networking.hostname}}, OS: {{.system.os.name}} {{.system.os.release.full}}, CPU: {{.system.processors.models.0}}, RAM: {{.system.memory.system.total}}"
+      command: echo "Host: {% raw %}{{.system.networking.hostname}}, OS: {{.system.os.name}} {{.system.os.release.full}}, CPU: {{.system.processors.models.0}}, RAM: {{.system.memory.system.total}}{% endraw %}"
 ```
 
 ##### OS-Specific Deployment
@@ -690,12 +690,12 @@ playbook:
     - name: Install Dependencies (Debian)
       command: apt-get install -y nginx nodejs
       sudo: true
-      when: "{{.os_info.os.family}} == Debian"
+      when: "{% raw %}{{.os_info.os.family}}{% endraw %} == Debian"
       
     - name: Install Dependencies (RedHat)
       command: yum install -y nginx nodejs
       sudo: true
-      when: "{{.os_info.os.family}} == RedHat"
+      when: "{% raw %}{{.os_info.os.family}}{% endraw %} == RedHat"
       
     - name: Deploy Application
       command: /usr/local/bin/deploy.sh
@@ -755,6 +755,31 @@ groups:
     order: 3
     depends_on: [applications]
     hosts: [...]
+```
+
+### Task Group Restrictions
+
+Restrict tasks to specific groups:
+```yaml
+tasks:
+  - name: Database Backup
+    command: /usr/local/bin/backup-db.sh
+    sudo: true
+    only_groups: [database]
+    
+  - name: Web Server Config
+    command: /etc/nginx/sites-available/default
+    sudo: true
+    only_groups: [webserver]
+    
+  - name: Update All Servers
+    command: apt-get update
+    sudo: true
+    # No only_groups, runs on all hosts
+    
+  - name: Test Environment Only
+    command: /usr/local/bin/test-feature.sh
+    skip_groups: [production]
 ```
 
 ### Retries and Error Handling
