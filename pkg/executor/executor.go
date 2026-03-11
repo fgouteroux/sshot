@@ -35,6 +35,13 @@ type Executor struct {
 	StartTime      time.Time
 }
 
+// Singleton SSH agent client to avoid connection exhaustion
+var (
+	sshAgentOnce   sync.Once
+	sshAgentClient agent.ExtendedAgent
+	sshAgentConn   net.Conn
+)
+
 func (e *Executor) CollectFacts(factsConfig types.FactsConfig) error {
 	writer := e.OutputWriter
 	if writer == nil {
@@ -1265,13 +1272,21 @@ func getSSHAgent() ssh.AuthMethod {
 		return nil
 	}
 
-	conn, err := net.Dial("unix", sshAuthSock)
-	if err != nil {
+	// Use sync.Once to create a single SSH agent connection
+	sshAgentOnce.Do(func() {
+		conn, err := net.Dial("unix", sshAuthSock)
+		if err != nil {
+			return
+		}
+		sshAgentConn = conn
+		sshAgentClient = agent.NewClient(conn)
+	})
+
+	if sshAgentClient == nil {
 		return nil
 	}
 
-	agentClient := agent.NewClient(conn)
-	return ssh.PublicKeysCallback(agentClient.Signers)
+	return ssh.PublicKeysCallback(sshAgentClient.Signers)
 }
 
 func (e *Executor) Close() error {
