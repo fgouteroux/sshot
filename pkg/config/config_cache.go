@@ -6,23 +6,24 @@ import (
 	"github.com/fgouteroux/sshot/pkg/types"
 )
 
-// ConfigCache provides thread-safe access to the global config
-type ConfigCache struct {
+// cache provides thread-safe access to the global config
+type cache struct {
 	sync.RWMutex
 	config *types.Config
 }
 
-var Cache = &ConfigCache{}
+// Cache is the global config cache instance
+var Cache = &cache{}
 
 // Set stores a config in the cache
-func (c *ConfigCache) Set(config *types.Config) {
+func (c *cache) Set(config *types.Config) {
 	c.Lock()
 	defer c.Unlock()
 	c.config = config
 }
 
 // Get retrieves the config from the cache
-func (c *ConfigCache) Get() (*types.Config, bool) {
+func (c *cache) Get() (*types.Config, bool) {
 	c.RLock()
 	defer c.RUnlock()
 	return c.config, c.config != nil

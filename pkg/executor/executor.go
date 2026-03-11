@@ -39,7 +39,6 @@ type Executor struct {
 var (
 	sshAgentOnce   sync.Once
 	sshAgentClient agent.ExtendedAgent
-	sshAgentConn   net.Conn
 )
 
 func (e *Executor) CollectFacts(factsConfig types.FactsConfig) error {
@@ -1278,7 +1277,6 @@ func getSSHAgent() ssh.AuthMethod {
 		if err != nil {
 			return
 		}
-		sshAgentConn = conn
 		sshAgentClient = agent.NewClient(conn)
 	})
 
