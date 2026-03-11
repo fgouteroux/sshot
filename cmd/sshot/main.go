@@ -2,16 +2,26 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
+	"runtime"
 
 	"github.com/fgouteroux/sshot/pkg/playbook"
 	"github.com/fgouteroux/sshot/pkg/types"
 )
 
+// Build information set via ldflags
+var (
+	Version = "dev"
+	Commit  = "none"
+	Date    = "unknown"
+)
+
 var execOptions types.ExecutionOptions
 
 func main() {
+	version := flag.Bool("version", false, "Show version information")
 	dryRun := flag.Bool("dry-run", false, "Run in dry-run mode (don't execute commands)")
 	dryRunShort := flag.Bool("n", false, "Run in dry-run mode (shorthand)")
 	verbose := flag.Bool("verbose", false, "Enable verbose logging")
@@ -24,6 +34,14 @@ func main() {
 	inventoryShort := flag.String("i", "", "Path to inventory file (shorthand)")
 
 	flag.Parse()
+
+	if *version {
+		fmt.Printf("sshot %s\n", Version)
+		fmt.Printf("  commit: %s\n", Commit)
+		fmt.Printf("  built:  %s\n", Date)
+		fmt.Printf("  go:     %s\n", runtime.Version())
+		os.Exit(0)
+	}
 
 	execOptions.DryRun = *dryRun || *dryRunShort
 	execOptions.Verbose = *verbose || *verboseShort
