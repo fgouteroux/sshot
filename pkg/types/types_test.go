@@ -1,4 +1,4 @@
-package main
+package types
 
 import (
 	"testing"
@@ -160,7 +160,7 @@ func TestSSHConfig_Structure(t *testing.T) {
 		KeyPassword:        "keypass",
 		UseAgent:           true,
 		Port:               2222,
-		StrictHostKeyCheck: boolPtr(true),
+		StrictHostKeyCheck: BoolPtr(true),
 	}
 
 	if sshConfig.User != "admin" {

@@ -1,6 +1,7 @@
-package main
+package utils
 
 import (
+	"github.com/fgouteroux/sshot/pkg/types"
 	"testing"
 	"time"
 )
@@ -13,13 +14,13 @@ func TestColor(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "color enabled",
+			name:     "Color enabled",
 			noColor:  false,
 			input:    ColorRed,
 			expected: ColorRed,
 		},
 		{
-			name:     "color disabled",
+			name:     "Color disabled",
 			noColor:  true,
 			input:    ColorRed,
 			expected: "",
@@ -28,10 +29,10 @@ func TestColor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			execOptions.NoColor = tt.noColor
-			result := color(tt.input)
+			types.ExecOptions.NoColor = tt.noColor
+			result := Color(tt.input)
 			if result != tt.expected {
-				t.Errorf("color() = %q, want %q", result, tt.expected)
+				t.Errorf("Color() = %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -72,9 +73,9 @@ func TestFormatDuration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := formatDuration(tt.duration)
+			result := FormatDuration(tt.duration)
 			if result != tt.expected {
-				t.Errorf("formatDuration(%v) = %q, want %q", tt.duration, result, tt.expected)
+				t.Errorf("FormatDuration(%v) = %q, want %q", tt.duration, result, tt.expected)
 			}
 		})
 	}

@@ -1,6 +1,10 @@
-package main
+package integration_test
 
 import (
+	"github.com/fgouteroux/sshot/pkg/playbook"
+	"github.com/fgouteroux/sshot/pkg/types"
+	"github.com/fgouteroux/sshot/pkg/config"
+	"github.com/fgouteroux/sshot/pkg/executor"
 	"bytes"
 	"encoding/json"
 	"os"
@@ -10,14 +14,14 @@ import (
 )
 
 func TestFactsCollection(t *testing.T) {
-	// Save original execOptions
-	originalDryRun := execOptions.DryRun
+	// Save original types.ExecOptions
+	originalDryRun := types.ExecOptions.DryRun
 	defer func() {
-		execOptions.DryRun = originalDryRun
+		types.ExecOptions.DryRun = originalDryRun
 	}()
 
 	// Enable dry-run for tests
-	execOptions.DryRun = true
+	types.ExecOptions.DryRun = true
 
 	tmpDir := t.TempDir()
 
@@ -43,7 +47,7 @@ playbook:
         command: echo '{"version": "1.2.3", "status": "running"}'
         sudo: true
   tasks:
-    - name: OS-specific Task
+    - name: OS-specific types.Task
       command: echo "Running on {{.system_facts.os.name}}"
       when: "{{.system_facts.os.family}} == RedHat"
     - name: Skip on Debian
@@ -58,7 +62,7 @@ playbook:
 
 	// Test collector struct
 	t.Run("FactCollector_Struct", func(t *testing.T) {
-		collector := FactCollector{
+		collector := types.FactCollector{
 			Name:    "test",
 			Command: "echo '{}'",
 			Sudo:    true,
@@ -77,8 +81,8 @@ playbook:
 
 	// Test facts config struct
 	t.Run("FactsConfig_Struct", func(t *testing.T) {
-		config := FactsConfig{
-			Collectors: []FactCollector{
+		config := types.FactsConfig{
+			Collectors: []types.FactCollector{
 				{Name: "test1", Command: "cmd1"},
 				{Name: "test2", Command: "cmd2"},
 			},
@@ -92,8 +96,8 @@ playbook:
 		}
 	})
 
-	// Test flattenMap function
-	t.Run("FlattenMap_Function", func(t *testing.T) {
+	// Test executor.FlattenMap function
+	t.Run("executor.FlattenMap_Function", func(t *testing.T) {
 		nestedMap := map[string]interface{}{
 			"a": "value",
 			"b": map[string]interface{}{
@@ -105,7 +109,7 @@ playbook:
 			"f": []interface{}{1, 2, 3},
 		}
 
-		flattened := flattenMap(nestedMap, "prefix.")
+		flattened := executor.FlattenMap(nestedMap, "prefix.")
 
 		// Check keys and values
 		expectedKeys := []string{"prefix.a", "prefix.b.c", "prefix.b.d.e", "prefix.f"}
@@ -141,18 +145,18 @@ playbook:
 		var output bytes.Buffer
 
 		// Create executor with manually populated facts
-		executor := &Executor{
-			host: Host{
+		executor := &executor.Executor{
+			Host: types.Host{
 				Name: "testhost",
 			},
-			variables:      make(map[string]interface{}),
-			registers:      make(map[string]string),
-			completedTasks: make(map[string]bool),
-			outputWriter:   &output,
+			Variables:      make(map[string]interface{}),
+			Registers:      make(map[string]string),
+			CompletedTasks: make(map[string]bool),
+			OutputWriter:   &output,
 		}
 
 		// Directly set the variables for testing
-		executor.variables["test_facts"] = map[string]interface{}{
+		executor.Variables["test_facts"] = map[string]interface{}{
 			"key": "value",
 			"nested": map[string]interface{}{
 				"deep": float64(123),
@@ -160,11 +164,11 @@ playbook:
 		}
 
 		// Also add the flattened values
-		executor.variables["test_facts.key"] = "value"
-		executor.variables["test_facts.nested.deep"] = float64(123)
+		executor.Variables["test_facts.key"] = "value"
+		executor.Variables["test_facts.nested.deep"] = float64(123)
 
 		// Now verify the variables were set correctly
-		testFacts, ok := executor.variables["test_facts"].(map[string]interface{})
+		testFacts, ok := executor.Variables["test_facts"].(map[string]interface{})
 		if !ok {
 			t.Errorf("Facts not stored in variables map")
 		} else {
@@ -182,15 +186,15 @@ playbook:
 		}
 
 		// Check flattened values
-		if val, ok := executor.variables["test_facts.key"]; !ok || val != "value" {
-			t.Errorf("variables['test_facts.key'] = %v, want 'value'", executor.variables["test_facts.key"])
+		if val, ok := executor.Variables["test_facts.key"]; !ok || val != "value" {
+			t.Errorf("variables['test_facts.key'] = %v, want 'value'", executor.Variables["test_facts.key"])
 		}
 	})
 
 	// Test variable substitution with facts
 	t.Run("VariableSubstitution_WithFacts", func(t *testing.T) {
-		executor := &Executor{
-			variables: map[string]interface{}{
+		executor := &executor.Executor{
+			Variables: map[string]interface{}{
 				"system_facts": map[string]interface{}{
 					"os": map[string]interface{}{
 						"family": "RedHat",
@@ -203,7 +207,7 @@ playbook:
 		}
 
 		// Test substituting dot notation
-		result := executor.substituteVars("OS: {{.system_facts.os.name}}")
+		result := executor.SubstituteVars("OS: {{.system_facts.os.name}}")
 		if result != "OS: CentOS" {
 			t.Errorf("substituteVars() = %q, want 'OS: CentOS'", result)
 		}
@@ -217,11 +221,11 @@ playbook:
 	t.Run("ConditionalExecution_WithFacts", func(t *testing.T) {
 		var output bytes.Buffer
 
-		executor := &Executor{
-			host: Host{
+		executor := &executor.Executor{
+			Host: types.Host{
 				Name: "testhost",
 			},
-			variables: map[string]interface{}{
+			Variables: map[string]interface{}{
 				"system_facts": map[string]interface{}{
 					"os": map[string]interface{}{
 						"family": "RedHat",
@@ -231,14 +235,14 @@ playbook:
 				"system_facts.os.family": "RedHat",
 				"system_facts.os.name":   "CentOS",
 			},
-			registers:      make(map[string]string),
-			completedTasks: make(map[string]bool),
-			outputWriter:   &output,
+			Registers:      make(map[string]string),
+			CompletedTasks: make(map[string]bool),
+			OutputWriter:   &output,
 		}
 
-		// Task that should execute (condition met)
-		task1 := Task{
-			Name:    "RedHat Task",
+		// types.Task that should execute (condition met)
+		task1 := types.Task{
+			Name:    "RedHat types.Task",
 			Command: "echo redhat",
 			When:    "{{.system_facts.os.family}} == RedHat",
 		}
@@ -248,13 +252,13 @@ playbook:
 			t.Errorf("ExecuteTask() error = %v", err)
 		}
 
-		if !executor.completedTasks[task1.Name] {
-			t.Errorf("Task %q should have been executed", task1.Name)
+		if !executor.CompletedTasks[task1.Name] {
+			t.Errorf("types.Task %q should have been executed", task1.Name)
 		}
 
-		// Task that should be skipped (condition not met)
-		task2 := Task{
-			Name:    "Debian Task",
+		// types.Task that should be skipped (condition not met)
+		task2 := types.Task{
+			Name:    "Debian types.Task",
 			Command: "echo debian",
 			When:    "{{.system_facts.os.family}} == Debian",
 		}
@@ -283,14 +287,14 @@ inventory:
     - name: testhost
       address: 127.0.0.1
 playbook:
-  name: Facts Config Test
+  name: Facts types.Config Test
   facts:
     collectors:
       - name: system_facts
         command: "echo '{\"os\": {\"family\": \"RedHat\"}}'"
         sudo: false
   tasks:
-    - name: Test Task
+    - name: Test types.Task
       command: echo test
 `
 
@@ -300,9 +304,9 @@ playbook:
 		}
 
 		// Parse the file
-		config, err := loadConfig(yamlFile, "")
+		config, err := config.Load(yamlFile, "")
 		if err != nil {
-			t.Fatalf("loadConfig() error = %v", err)
+			t.Fatalf("config.Load() error = %v", err)
 		}
 
 		// Verify the facts config was loaded correctly
@@ -333,10 +337,10 @@ playbook:
 
 func TestFullPlaybookExecution_WithFacts(t *testing.T) {
 	// Enable dry-run mode for test
-	originalDryRun := execOptions.DryRun
-	execOptions.DryRun = true
+	originalDryRun := types.ExecOptions.DryRun
+	types.ExecOptions.DryRun = true
 	defer func() {
-		execOptions.DryRun = originalDryRun
+		types.ExecOptions.DryRun = originalDryRun
 	}()
 
 	tmpDir := t.TempDir()
@@ -358,7 +362,7 @@ playbook:
         command: "echo '{\"os\": {\"family\": \"Debian\"}}'"
         sudo: false
   tasks:
-    - name: Test Task
+    - name: Test types.Task
       command: echo test
 `
 
@@ -367,20 +371,20 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, &types.ExecOptions)
 	if err != nil {
-		t.Errorf("RunPlaybook() with facts error = %v", err)
+		t.Errorf("playbook.Run() with facts error = %v", err)
 	}
 }
 
 // Additional test for the cache functionality
 func TestConfigCache(t *testing.T) {
 	// Create a test config
-	testConfig := &Config{
-		Playbook: Playbook{
-			Name: "Test Playbook",
-			Facts: FactsConfig{
-				Collectors: []FactCollector{
+	testConfig := &types.Config{
+		Playbook: types.Playbook{
+			Name: "Test types.Playbook",
+			Facts: types.FactsConfig{
+				Collectors: []types.FactCollector{
 					{Name: "test", Command: "echo '{}'"},
 				},
 			},
@@ -388,16 +392,16 @@ func TestConfigCache(t *testing.T) {
 	}
 
 	// Set the config in cache
-	configCache.Set(testConfig)
+	config.Cache.Set(testConfig)
 
 	// Get the config from cache
-	retrievedConfig, ok := configCache.Get()
+	retrievedConfig, ok := config.Cache.Get()
 	if !ok {
 		t.Errorf("Expected to get config from cache")
 	}
 
-	if retrievedConfig.Playbook.Name != "Test Playbook" {
-		t.Errorf("Retrieved config name = %q, want 'Test Playbook'", retrievedConfig.Playbook.Name)
+	if retrievedConfig.Playbook.Name != "Test types.Playbook" {
+		t.Errorf("Retrieved config name = %q, want 'Test types.Playbook'", retrievedConfig.Playbook.Name)
 	}
 
 	if len(retrievedConfig.Playbook.Facts.Collectors) != 1 {

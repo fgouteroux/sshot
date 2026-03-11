@@ -1,8 +1,10 @@
-package main
+package utils
 
 import (
 	"fmt"
 	"time"
+
+	"github.com/fgouteroux/sshot/pkg/types"
 )
 
 // ANSI color codes
@@ -18,14 +20,14 @@ const (
 	ColorBold    = "\033[1m"
 )
 
-func color(color string) string {
-	if execOptions.NoColor {
+func Color(color string) string {
+	if types.ExecOptions.NoColor {
 		return ""
 	}
 	return color
 }
 
-func formatDuration(d time.Duration) string {
+func FormatDuration(d time.Duration) string {
 	d = d.Round(time.Second)
 	h := d / time.Hour
 	d -= h * time.Hour

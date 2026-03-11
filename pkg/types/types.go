@@ -1,19 +1,18 @@
-package main
+package types
 
 import (
-	"io"
 	"sync"
-	"time"
 
-	"golang.org/x/crypto/ssh"
 )
 
-var runOnceTasks = struct {
+var RunOnceTasks = struct {
 	sync.RWMutex
-	executed map[string]bool
+	Executed map[string]bool
 }{
-	executed: make(map[string]bool),
+	Executed: make(map[string]bool),
 }
+
+var ExecOptions ExecutionOptions
 
 type Config struct {
 	Inventory Inventory `yaml:"inventory"`
@@ -130,17 +129,6 @@ type CopyTask struct {
 	Mode string `yaml:"mode,omitempty"`
 }
 
-type Executor struct {
-	host           Host
-	client         *ssh.Client
-	variables      map[string]interface{}
-	registers      map[string]string
-	completedTasks map[string]bool
-	groupName      string
-	mu             sync.Mutex
-	outputWriter   io.Writer
-	startTime      time.Time
-}
 
 type HostResult struct {
 	Host    Host

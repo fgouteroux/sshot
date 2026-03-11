@@ -1,6 +1,7 @@
-package main
+package playbook
 
 import (
+	"github.com/fgouteroux/sshot/pkg/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,33 +12,33 @@ import (
 func TestPrintPlaybookSummary(t *testing.T) {
 	tests := []struct {
 		name     string
-		results  []HostResult
+		results  []types.HostResult
 		err      error
 		duration time.Duration
 	}{
 		{
 			name: "all successful",
-			results: []HostResult{
-				{Host: Host{Name: "host1"}, Success: true},
-				{Host: Host{Name: "host2"}, Success: true},
+			results: []types.HostResult{
+				{Host: types.Host{Name: "host1"}, Success: true},
+				{Host: types.Host{Name: "host2"}, Success: true},
 			},
 			err:      nil,
 			duration: 30 * time.Second,
 		},
 		{
 			name: "some failures",
-			results: []HostResult{
-				{Host: Host{Name: "host1"}, Success: true},
-				{Host: Host{Name: "host2"}, Success: false, Error: os.ErrNotExist},
+			results: []types.HostResult{
+				{Host: types.Host{Name: "host1"}, Success: true},
+				{Host: types.Host{Name: "host2"}, Success: false, Error: os.ErrNotExist},
 			},
 			err:      os.ErrNotExist,
 			duration: 45 * time.Second,
 		},
 		{
 			name: "all failures",
-			results: []HostResult{
-				{Host: Host{Name: "host1"}, Success: false},
-				{Host: Host{Name: "host2"}, Success: false},
+			results: []types.HostResult{
+				{Host: types.Host{Name: "host1"}, Success: false},
+				{Host: types.Host{Name: "host2"}, Success: false},
 			},
 			err:      os.ErrInvalid,
 			duration: 20 * time.Second,
@@ -53,9 +54,9 @@ func TestPrintPlaybookSummary(t *testing.T) {
 }
 
 func TestRunPlaybook_InvalidFile(t *testing.T) {
-	err := RunPlaybook("nonexistent.yml")
+	err := Run("nonexistent.yml", &types.ExecOptions)
 	if err == nil {
-		t.Error("RunPlaybook should fail with non-existent file")
+		t.Error("Run should fail with non-existent file")
 	}
 }
 
@@ -68,9 +69,9 @@ func TestRunPlaybook_InvalidYAML(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
-	err = RunPlaybook(tmpFile)
+	err = Run(tmpFile, &types.ExecOptions)
 	if err == nil {
-		t.Error("RunPlaybook should fail with invalid YAML")
+		t.Error("Run should fail with invalid YAML")
 	}
 }
 
@@ -85,7 +86,7 @@ inventory:
 playbook:
   name: No Hosts Test
   tasks:
-    - name: Test Task
+    - name: Test types.Task
       command: echo test
 `
 
@@ -94,9 +95,9 @@ playbook:
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
-	err = RunPlaybook(tmpFile)
+	err = Run(tmpFile, &types.ExecOptions)
 	if err == nil {
-		t.Error("RunPlaybook should fail with no hosts")
+		t.Error("Run should fail with no hosts")
 	}
 	if !strings.Contains(err.Error(), "no hosts or groups") {
 		t.Errorf("Error should mention no hosts, got: %v", err)
@@ -104,9 +105,9 @@ playbook:
 }
 
 func TestRunPlaybook_DryRun(t *testing.T) {
-	execOptions.DryRun = true
+	types.ExecOptions.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -123,7 +124,7 @@ inventory:
 playbook:
   name: Dry Run Test
   tasks:
-    - name: Echo Task
+    - name: Echo types.Task
       command: echo "test"
 `
 
@@ -133,40 +134,40 @@ playbook:
 	}
 
 	// Dry run should succeed even without actual SSH connection
-	err = RunPlaybook(tmpFile)
+	err = Run(tmpFile, &types.ExecOptions)
 	if err != nil {
-		t.Errorf("RunPlaybook dry run failed: %v", err)
+		t.Errorf("Run dry run failed: %v", err)
 	}
 }
 
 func TestExecuteWithGroups_DependencyNotMet(t *testing.T) {
-	execOptions.DryRun = true
+	types.ExecOptions.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 	}()
 
-	config := Config{
-		Inventory: Inventory{
-			Groups: []Group{
+	config := types.Config{
+		Inventory: types.Inventory{
+			Groups: []types.Group{
 				{
 					Name:  "group1",
 					Order: 1,
-					Hosts: []Host{
+					Hosts: []types.Host{
 						{Name: "host1", Address: "127.0.0.1", User: "testuser", Password: "testpass"},
 					},
 				},
 				{
 					Name:  "group2",
 					Order: 2,
-					Hosts: []Host{
+					Hosts: []types.Host{
 						{Name: "host2", Address: "127.0.0.1", User: "testuser", Password: "testpass"},
 					},
 				},
 			},
 		},
-		Playbook: Playbook{
+		Playbook: types.Playbook{
 			Name: "Test Order",
-			Tasks: []Task{
+			Tasks: []types.Task{
 				{Name: "Task1", Command: "echo test"},
 			},
 		},
@@ -184,17 +185,17 @@ func TestExecuteWithGroups_DependencyNotMet(t *testing.T) {
 }
 
 func TestExecuteHostsSequential(t *testing.T) {
-	execOptions.DryRun = true
+	types.ExecOptions.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 	}()
 
-	hosts := []Host{
+	hosts := []types.Host{
 		{Name: "host1", Address: "127.0.0.1", User: "testuser", Password: "testpass"},
 		{Name: "host2", Address: "127.0.0.2", User: "testuser", Password: "testpass"},
 	}
 
-	tasks := []Task{
+	tasks := []types.Task{
 		{Name: "Task1", Command: "echo test"},
 	}
 
@@ -213,18 +214,18 @@ func TestExecuteHostsSequential(t *testing.T) {
 }
 
 func TestExecuteHostsParallel(t *testing.T) {
-	execOptions.DryRun = true
+	types.ExecOptions.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 	}()
 
-	hosts := []Host{
+	hosts := []types.Host{
 		{Name: "host1", Address: "127.0.0.1", User: "testuser", Password: "testpass"},
 		{Name: "host2", Address: "127.0.0.2", User: "testuser", Password: "testpass"},
 		{Name: "host3", Address: "127.0.0.3", User: "testuser", Password: "testpass"},
 	}
 
-	tasks := []Task{
+	tasks := []types.Task{
 		{Name: "Task1", Command: "echo test"},
 		{Name: "Task2", Command: "echo test2"},
 	}
@@ -244,19 +245,19 @@ func TestExecuteHostsParallel(t *testing.T) {
 }
 
 func TestExecuteOnHost_DryRun(t *testing.T) {
-	execOptions.DryRun = true
+	types.ExecOptions.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 	}()
 
-	host := Host{
+	host := types.Host{
 		Name:     "testhost",
 		Address:  "127.0.0.1",
 		User:     "testuser",
 		Password: "testpass",
 	}
 
-	tasks := []Task{
+	tasks := []types.Task{
 		{Name: "Task1", Command: "echo hello"},
 		{Name: "Task2", Command: "echo world"},
 	}
@@ -270,14 +271,14 @@ func TestExecuteOnHost_DryRun(t *testing.T) {
 	if result.Host.Name != host.Name {
 		t.Errorf("Result host name = %q, want %q", result.Host.Name, host.Name)
 	}
-	config := Config{
-		Inventory: Inventory{
-			Groups: []Group{
+	config := types.Config{
+		Inventory: types.Inventory{
+			Groups: []types.Group{
 				{
 					Name:      "group1",
 					Order:     1,
 					DependsOn: []string{"missing_group"},
-					Hosts: []Host{
+					Hosts: []types.Host{
 						{
 							Name:     "host1",
 							Address:  "127.0.0.1",
@@ -288,9 +289,9 @@ func TestExecuteOnHost_DryRun(t *testing.T) {
 				},
 			},
 		},
-		Playbook: Playbook{
+		Playbook: types.Playbook{
 			Name: "Test",
-			Tasks: []Task{
+			Tasks: []types.Task{
 				{Name: "Task1", Command: "echo test"},
 			},
 		},
@@ -306,42 +307,42 @@ func TestExecuteOnHost_DryRun(t *testing.T) {
 }
 
 func TestExecuteWithGroups_SortByOrder(t *testing.T) {
-	execOptions.DryRun = true
-	execOptions.Verbose = false
+	types.ExecOptions.DryRun = true
+	types.ExecOptions.Verbose = false
 	defer func() {
-		execOptions.DryRun = false
-		execOptions.Verbose = false
+		types.ExecOptions.DryRun = false
+		types.ExecOptions.Verbose = false
 	}()
 
-	config := Config{
-		Inventory: Inventory{
-			Groups: []Group{
+	config := types.Config{
+		Inventory: types.Inventory{
+			Groups: []types.Group{
 				{
 					Name:  "group3",
 					Order: 3,
-					Hosts: []Host{
+					Hosts: []types.Host{
 						{Name: "host3", Address: "127.0.0.1", User: "testuser", Password: "testpass"},
 					},
 				},
 				{
 					Name:  "group1",
 					Order: 1,
-					Hosts: []Host{
+					Hosts: []types.Host{
 						{Name: "host1", Address: "127.0.0.1", User: "testuser", Password: "testpass"},
 					},
 				},
 				{
 					Name:  "group2",
 					Order: 2,
-					Hosts: []Host{
+					Hosts: []types.Host{
 						{Name: "host2", Address: "127.0.0.1", User: "testuser", Password: "testpass"},
 					},
 				},
 			},
 		},
-		Playbook: Playbook{
+		Playbook: types.Playbook{
 			Name: "Test Order",
-			Tasks: []Task{
+			Tasks: []types.Task{
 				{Name: "Task1", Command: "echo test"},
 			},
 		},

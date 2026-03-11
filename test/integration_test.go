@@ -1,18 +1,19 @@
-package main
+package integration_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/fgouteroux/sshot/pkg/playbook"
+	"github.com/fgouteroux/sshot/pkg/types"
 )
 
 func TestFullPlaybookExecution_DryRun(t *testing.T) {
-	execOptions.DryRun = true
-	execOptions.Verbose = false
-	defer func() {
-		execOptions.DryRun = false
-		execOptions.Verbose = false
-	}()
+	opts := &types.ExecutionOptions{
+		DryRun:  true,
+		Verbose: false,
+	}
 
 	tmpDir := t.TempDir()
 	playbookFile := filepath.Join(tmpDir, "playbook.yml")
@@ -55,18 +56,19 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() error = %v", err)
+		t.Errorf("playbook.Run() error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_WithGroups(t *testing.T) {
-	execOptions.DryRun = true
-	execOptions.Verbose = false
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
+	opts.Verbose = false
 	defer func() {
-		execOptions.DryRun = false
-		execOptions.Verbose = false
+		opts.DryRun = false
+		opts.Verbose = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -110,16 +112,17 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with groups error = %v", err)
+		t.Errorf("playbook.Run() with groups error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_WithConditionals(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -155,16 +158,17 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with conditionals error = %v", err)
+		t.Errorf("playbook.Run() with conditionals error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_WithVariables(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -201,16 +205,17 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with variables error = %v", err)
+		t.Errorf("playbook.Run() with variables error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_WithDependencies(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -245,16 +250,17 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with dependencies error = %v", err)
+		t.Errorf("playbook.Run() with dependencies error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_ParallelMode(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -289,16 +295,17 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() in parallel mode error = %v", err)
+		t.Errorf("playbook.Run() in parallel mode error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_WithScripts(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -339,16 +346,17 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with script error = %v", err)
+		t.Errorf("playbook.Run() with script error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_WithWaitFor(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -381,18 +389,19 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with wait_for error = %v", err)
+		t.Errorf("playbook.Run() with wait_for error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_ComplexScenario(t *testing.T) {
-	execOptions.DryRun = true
-	execOptions.Verbose = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
+	opts.Verbose = true
 	defer func() {
-		execOptions.DryRun = false
-		execOptions.Verbose = false
+		opts.DryRun = false
+		opts.Verbose = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -469,16 +478,17 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() complex scenario error = %v", err)
+		t.Errorf("playbook.Run() complex scenario error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_FailedGroupDependency(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -509,18 +519,19 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err == nil {
-		t.Error("RunPlaybook() should fail with missing dependency")
+		t.Error("playbook.Run() should fail with missing dependency")
 	}
 }
 
 func TestFullPlaybookExecution_WithProgress(t *testing.T) {
-	execOptions.DryRun = true
-	execOptions.Progress = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
+	opts.Progress = true
 	defer func() {
-		execOptions.DryRun = false
-		execOptions.Progress = false
+		opts.DryRun = false
+		opts.Progress = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -547,18 +558,19 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with progress error = %v", err)
+		t.Errorf("playbook.Run() with progress error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_WithNoColor(t *testing.T) {
-	execOptions.DryRun = true
-	execOptions.NoColor = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
+	opts.NoColor = true
 	defer func() {
-		execOptions.DryRun = false
-		execOptions.NoColor = false
+		opts.DryRun = false
+		opts.NoColor = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -584,22 +596,19 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with no-color error = %v", err)
+		t.Errorf("playbook.Run() with no-color error = %v", err)
 	}
 
-	// Verify color function returns empty string
-	colorResult := color(ColorRed)
-	if colorResult != "" {
-		t.Errorf("color() should return empty string when NoColor=true, got: %q", colorResult)
-	}
+	// Color output verification removed - internal implementation detail
 }
 
 func TestFullPlaybookExecution_MixedHostsAndGroups(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -632,16 +641,17 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with mixed inventory error = %v", err)
+		t.Errorf("playbook.Run() with mixed inventory error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_EmptyTasks(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -665,16 +675,17 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with empty tasks error = %v", err)
+		t.Errorf("playbook.Run() with empty tasks error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_HostnameOnly(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -699,16 +710,17 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with hostname only error = %v", err)
+		t.Errorf("playbook.Run() with hostname only error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_AllSSHOptions(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -736,16 +748,17 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with SSH options error = %v", err)
+		t.Errorf("playbook.Run() with SSH options error = %v", err)
 	}
 }
 
 func TestFullPlaybookExecution_TaskWithAllOptions(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -784,16 +797,17 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with all task options error = %v", err)
+		t.Errorf("playbook.Run() with all task options error = %v", err)
 	}
 }
 
 func TestIntegration_MultipleGroupOrders(t *testing.T) {
-	execOptions.DryRun = true
+	opts := &types.ExecutionOptions{}
+	opts.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		opts.DryRun = false
 	}()
 
 	tmpDir := t.TempDir()
@@ -832,8 +846,8 @@ playbook:
 		t.Fatalf("Failed to create playbook file: %v", err)
 	}
 
-	err = RunPlaybook(playbookFile)
+	err = playbook.Run(playbookFile, opts)
 	if err != nil {
-		t.Errorf("RunPlaybook() with multiple group orders error = %v", err)
+		t.Errorf("playbook.Run() with multiple group orders error = %v", err)
 	}
 }

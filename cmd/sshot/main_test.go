@@ -2,10 +2,12 @@ package main
 
 import (
 	"testing"
+
+	"github.com/fgouteroux/sshot/pkg/types"
 )
 
 func TestExecutionOptions_Defaults(t *testing.T) {
-	opts := ExecutionOptions{}
+	opts := types.ExecutionOptions{}
 
 	if opts.DryRun {
 		t.Error("DryRun should default to false")

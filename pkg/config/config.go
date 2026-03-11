@@ -1,37 +1,38 @@
-package main
+package config
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/fgouteroux/sshot/pkg/types"
 	"gopkg.in/yaml.v3"
 )
 
-func unmarshalConfig(data []byte, config *Config) error {
+func unmarshalConfig(data []byte, config *types.Config) error {
 	return yaml.Unmarshal(data, config)
 }
 
-func unmarshalInventory(data []byte) (*Inventory, error) {
-	var invConfig InventoryConfig
+func unmarshalInventory(data []byte) (*types.Inventory, error) {
+	var invConfig types.InventoryConfig
 	if err := yaml.Unmarshal(data, &invConfig); err != nil {
 		return nil, err
 	}
 
-	return &Inventory{
+	return &types.Inventory{
 		Hosts:     invConfig.Hosts,
 		Groups:    invConfig.Groups,
 		SSHConfig: invConfig.SSHConfig,
 	}, nil
 }
 
-func unmarshalPlaybook(data []byte) (*Playbook, error) {
-	var pbConfig PlaybookConfig
+func unmarshalPlaybook(data []byte) (*types.Playbook, error) {
+	var pbConfig types.PlaybookConfig
 	if err := yaml.Unmarshal(data, &pbConfig); err != nil {
 		return nil, err
 	}
 
-	return &Playbook{
+	return &types.Playbook{
 		Name:     pbConfig.Name,
 		Parallel: pbConfig.Parallel,
 		Facts:    pbConfig.Facts,
@@ -39,7 +40,7 @@ func unmarshalPlaybook(data []byte) (*Playbook, error) {
 	}, nil
 }
 
-func loadConfig(playbookPath, inventoryPath string) (*Config, error) {
+func Load(playbookPath, inventoryPath string) (*types.Config, error) {
 	// If inventory path is provided, load separate files
 	if inventoryPath != "" {
 		return loadSeparateFiles(playbookPath, inventoryPath)
@@ -49,7 +50,7 @@ func loadConfig(playbookPath, inventoryPath string) (*Config, error) {
 	return loadCombinedFile(playbookPath)
 }
 
-func loadSeparateFiles(playbookPath, inventoryPath string) (*Config, error) {
+func loadSeparateFiles(playbookPath, inventoryPath string) (*types.Config, error) {
 	// Load inventory
 	invData, err := os.ReadFile(filepath.Clean(inventoryPath))
 	if err != nil {
@@ -72,19 +73,19 @@ func loadSeparateFiles(playbookPath, inventoryPath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse playbook: %w", err)
 	}
 
-	return &Config{
+	return &types.Config{
 		Inventory: *inventory,
 		Playbook:  *playbook,
 	}, nil
 }
 
-func loadCombinedFile(playbookPath string) (*Config, error) {
+func loadCombinedFile(playbookPath string) (*types.Config, error) {
 	data, err := os.ReadFile(filepath.Clean(playbookPath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config: %w", err)
 	}
 
-	var config Config
+	var config types.Config
 	if err := unmarshalConfig(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
@@ -92,7 +93,7 @@ func loadCombinedFile(playbookPath string) (*Config, error) {
 	return &config, nil
 }
 
-func applySSHDefaults(config *Config) {
+func ApplySSHDefaults(config *types.Config) {
 	// Apply defaults to direct hosts
 	for i := range config.Inventory.Hosts {
 		if config.Inventory.SSHConfig != nil {
@@ -116,7 +117,7 @@ func applySSHDefaults(config *Config) {
 	}
 }
 
-func ensureSecureDefaults(host *Host) {
+func ensureSecureDefaults(host *types.Host) {
 	// Set name if not set
 	if host.Name == "" {
 		if host.Hostname != "" {
@@ -133,7 +134,7 @@ func ensureSecureDefaults(host *Host) {
 	}
 }
 
-func applySSHDefaultsToHost(host *Host, defaults *SSHConfig) {
+func applySSHDefaultsToHost(host *types.Host, defaults *types.SSHConfig) {
 	// Set name to hostname if name is empty
 	if host.Name == "" {
 		if host.Hostname != "" {

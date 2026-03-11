@@ -4,9 +4,12 @@ import (
 	"flag"
 	"log"
 	"os"
+
+	"github.com/fgouteroux/sshot/pkg/playbook"
+	"github.com/fgouteroux/sshot/pkg/types"
 )
 
-var execOptions ExecutionOptions
+var execOptions types.ExecutionOptions
 
 func main() {
 	dryRun := flag.Bool("dry-run", false, "Run in dry-run mode (don't execute commands)")
@@ -64,7 +67,7 @@ func main() {
 			execOptions.DryRun, execOptions.Verbose, execOptions.Progress, execOptions.NoColor, execOptions.FullOutput)
 	}
 
-	if err := RunPlaybook(playbookPath); err != nil {
+	if err := playbook.Run(playbookPath, &execOptions); err != nil {
 		log.Fatalf("Playbook execution failed: %v", err)
 	}
 }

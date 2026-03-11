@@ -1,6 +1,7 @@
-package main
+package executor
 
 import (
+	"github.com/fgouteroux/sshot/pkg/types"
 	"bytes"
 	"strings"
 	"testing"
@@ -8,7 +9,7 @@ import (
 
 func TestExecutor_SubstituteVars(t *testing.T) {
 	executor := &Executor{
-		variables: map[string]interface{}{
+		Variables: map[string]interface{}{
 			"username": "admin",
 			"port":     "8080",
 			"path":     "/var/log",
@@ -44,7 +45,7 @@ func TestExecutor_SubstituteVars(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := executor.substituteVars(tt.input)
+			result := executor.SubstituteVars(tt.input)
 			if result != tt.expected {
 				t.Errorf("substituteVars() = %q, want %q", result, tt.expected)
 			}
@@ -54,7 +55,7 @@ func TestExecutor_SubstituteVars(t *testing.T) {
 
 func TestExecutor_EvaluateCondition(t *testing.T) {
 	executor := &Executor{
-		variables: map[string]interface{}{
+		Variables: map[string]interface{}{
 			"os":      "ubuntu",
 			"version": "20.04",
 			"defined": "value",
@@ -114,31 +115,31 @@ func TestExecutor_EvaluateCondition(t *testing.T) {
 }
 
 func TestExecutor_ExecuteTaskDryRun(t *testing.T) {
-	execOptions.DryRun = true
-	execOptions.Verbose = false
+	types.ExecOptions.DryRun = true
+	types.ExecOptions.Verbose = false
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 	}()
 
 	var output bytes.Buffer
 	executor := &Executor{
-		host: Host{
+		Host: types.Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]interface{}),
-		registers:      make(map[string]string),
-		completedTasks: make(map[string]bool),
-		outputWriter:   &output,
+		Variables:      make(map[string]interface{}),
+		Registers:      make(map[string]string),
+		CompletedTasks: make(map[string]bool),
+		OutputWriter:   &output,
 	}
 
 	tests := []struct {
 		name        string
-		task        Task
+		task        types.Task
 		expectedOut string
 	}{
 		{
 			name: "command task",
-			task: Task{
+			task: types.Task{
 				Name:    "Test Command",
 				Command: "echo hello",
 			},
@@ -146,7 +147,7 @@ func TestExecutor_ExecuteTaskDryRun(t *testing.T) {
 		},
 		{
 			name: "command with sudo",
-			task: Task{
+			task: types.Task{
 				Name:    "Sudo Command",
 				Command: "apt-get update",
 				Sudo:    true,
@@ -155,9 +156,9 @@ func TestExecutor_ExecuteTaskDryRun(t *testing.T) {
 		},
 		{
 			name: "copy task",
-			task: Task{
+			task: types.Task{
 				Name: "Copy File",
-				Copy: &CopyTask{
+				Copy: &types.CopyTask{
 					Src:  "/local/file",
 					Dest: "/remote/file",
 				},
@@ -166,7 +167,7 @@ func TestExecutor_ExecuteTaskDryRun(t *testing.T) {
 		},
 		{
 			name: "script task",
-			task: Task{
+			task: types.Task{
 				Name:   "Run Script",
 				Script: "/path/to/script.sh",
 			},
@@ -185,41 +186,41 @@ func TestExecutor_ExecuteTaskDryRun(t *testing.T) {
 			if !strings.Contains(outputStr, tt.expectedOut) {
 				t.Errorf("Output should contain %q, got: %q", tt.expectedOut, outputStr)
 			}
-			if !executor.completedTasks[tt.task.Name] {
-				t.Errorf("Task %q should be marked as completed", tt.task.Name)
+			if !executor.CompletedTasks[tt.task.Name] {
+				t.Errorf("types.Task %q should be marked as completed", tt.task.Name)
 			}
 		})
 	}
 }
 
 func TestExecutor_ExecuteTaskWithCondition(t *testing.T) {
-	execOptions.DryRun = true
+	types.ExecOptions.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 	}()
 
 	var output bytes.Buffer
 	executor := &Executor{
-		host: Host{
+		Host: types.Host{
 			Name: "testhost",
 		},
-		variables: map[string]interface{}{
+		Variables: map[string]interface{}{
 			"os": "ubuntu",
 		},
-		registers:      make(map[string]string),
-		completedTasks: make(map[string]bool),
-		outputWriter:   &output,
+		Registers:      make(map[string]string),
+		CompletedTasks: make(map[string]bool),
+		OutputWriter:   &output,
 	}
 
 	tests := []struct {
 		name          string
-		task          Task
+		task          types.Task
 		expectSkipped bool
 	}{
 		{
 			name: "condition met",
-			task: Task{
-				Name:    "Ubuntu Task",
+			task: types.Task{
+				Name:    "Ubuntu types.Task",
 				Command: "apt-get update",
 				When:    "{{.os}} == ubuntu",
 			},
@@ -227,8 +228,8 @@ func TestExecutor_ExecuteTaskWithCondition(t *testing.T) {
 		},
 		{
 			name: "condition not met",
-			task: Task{
-				Name:    "CentOS Task",
+			task: types.Task{
+				Name:    "CentOS types.Task",
 				Command: "yum update",
 				When:    "{{.os}} == centos",
 			},
@@ -259,34 +260,34 @@ func TestExecutor_ExecuteTaskWithCondition(t *testing.T) {
 }
 
 func TestExecutor_ExecuteTaskWithDependencies(t *testing.T) {
-	execOptions.DryRun = true
+	types.ExecOptions.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 	}()
 
 	var output bytes.Buffer
 	executor := &Executor{
-		host: Host{
+		Host: types.Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]interface{}),
-		registers:      make(map[string]string),
-		completedTasks: make(map[string]bool),
-		outputWriter:   &output,
+		Variables:      make(map[string]interface{}),
+		Registers:      make(map[string]string),
+		CompletedTasks: make(map[string]bool),
+		OutputWriter:   &output,
 	}
 
 	// Mark a task as completed
-	executor.completedTasks["first_task"] = true
+	executor.CompletedTasks["first_task"] = true
 
 	tests := []struct {
 		name    string
-		task    Task
+		task    types.Task
 		wantErr bool
 	}{
 		{
 			name: "dependency met",
-			task: Task{
-				Name:      "Second Task",
+			task: types.Task{
+				Name:      "Second types.Task",
 				Command:   "echo second",
 				DependsOn: []string{"first_task"},
 			},
@@ -294,8 +295,8 @@ func TestExecutor_ExecuteTaskWithDependencies(t *testing.T) {
 		},
 		{
 			name: "dependency not met",
-			task: Task{
-				Name:      "Third Task",
+			task: types.Task{
+				Name:      "Third types.Task",
 				Command:   "echo third",
 				DependsOn: []string{"missing_task"},
 			},
@@ -314,23 +315,23 @@ func TestExecutor_ExecuteTaskWithDependencies(t *testing.T) {
 }
 
 func TestExecutor_ExecuteTaskWithVars(t *testing.T) {
-	execOptions.DryRun = true
+	types.ExecOptions.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 	}()
 
 	executor := &Executor{
-		host: Host{
+		Host: types.Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]interface{}),
-		registers:      make(map[string]string),
-		completedTasks: make(map[string]bool),
-		outputWriter:   &bytes.Buffer{},
+		Variables:      make(map[string]interface{}),
+		Registers:      make(map[string]string),
+		CompletedTasks: make(map[string]bool),
+		OutputWriter:   &bytes.Buffer{},
 	}
 
-	task := Task{
-		Name:    "Task with vars",
+	task := types.Task{
+		Name:    "types.Task with vars",
 		Command: "echo test",
 		Vars: map[string]interface{}{
 			"new_var": "new_value",
@@ -343,32 +344,32 @@ func TestExecutor_ExecuteTaskWithVars(t *testing.T) {
 		t.Errorf("ExecuteTask() error = %v", err)
 	}
 
-	if executor.variables["new_var"] != "new_value" {
-		t.Errorf("Variable 'new_var' = %q, want 'new_value'", executor.variables["new_var"])
+	if executor.Variables["new_var"] != "new_value" {
+		t.Errorf("Variable 'new_var' = %q, want 'new_value'", executor.Variables["new_var"])
 	}
-	if executor.variables["key"] != "value" {
-		t.Errorf("Variable 'key' = %q, want 'value'", executor.variables["key"])
+	if executor.Variables["key"] != "value" {
+		t.Errorf("Variable 'key' = %q, want 'value'", executor.Variables["key"])
 	}
 }
 
 func TestExecutor_ExecuteTaskNoType(t *testing.T) {
-	execOptions.DryRun = false
+	types.ExecOptions.DryRun = false
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 	}()
 
 	executor := &Executor{
-		host: Host{
+		Host: types.Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]interface{}),
-		registers:      make(map[string]string),
-		completedTasks: make(map[string]bool),
-		outputWriter:   &bytes.Buffer{},
+		Variables:      make(map[string]interface{}),
+		Registers:      make(map[string]string),
+		CompletedTasks: make(map[string]bool),
+		OutputWriter:   &bytes.Buffer{},
 	}
 
-	task := Task{
-		Name: "No Type Task",
+	task := types.Task{
+		Name: "No Type types.Task",
 		// No command, script, copy, or wait_for
 	}
 
@@ -382,24 +383,24 @@ func TestExecutor_ExecuteTaskNoType(t *testing.T) {
 }
 
 func TestExecutor_ExecuteLocalActionDryRun(t *testing.T) {
-	execOptions.DryRun = true
+	types.ExecOptions.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 	}()
 
 	var output bytes.Buffer
 	executor := &Executor{
-		host: Host{
+		Host: types.Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]interface{}),
-		registers:      make(map[string]string),
-		completedTasks: make(map[string]bool),
-		outputWriter:   &output,
+		Variables:      make(map[string]interface{}),
+		Registers:      make(map[string]string),
+		CompletedTasks: make(map[string]bool),
+		OutputWriter:   &output,
 	}
 
-	task := Task{
-		Name:        "Local Action Task",
+	task := types.Task{
+		Name:        "Local Action types.Task",
 		LocalAction: "echo 'Running locally'",
 	}
 
@@ -415,27 +416,27 @@ func TestExecutor_ExecuteLocalActionDryRun(t *testing.T) {
 }
 
 func TestExecutor_RunOnceAndDelegation(t *testing.T) {
-	execOptions.DryRun = true
+	types.ExecOptions.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 		// Reset run_once tracking after the test
 		ResetRunOnceTracking()
 	}()
 
 	var output bytes.Buffer
 	executor := &Executor{
-		host: Host{
+		Host: types.Host{
 			Name: "testhost",
 		},
-		variables:      make(map[string]interface{}),
-		registers:      make(map[string]string),
-		completedTasks: make(map[string]bool),
-		outputWriter:   &output,
+		Variables:      make(map[string]interface{}),
+		Registers:      make(map[string]string),
+		CompletedTasks: make(map[string]bool),
+		OutputWriter:   &output,
 	}
 
 	// Test run_once local_action
-	task1 := Task{
-		Name:        "Run Once Local Task",
+	task1 := types.Task{
+		Name:        "Run Once Local types.Task",
 		LocalAction: "echo 'Running locally once'",
 		RunOnce:     true,
 	}
@@ -471,8 +472,8 @@ func TestExecutor_RunOnceAndDelegation(t *testing.T) {
 	// Test delegation
 	output.Reset()
 
-	task2 := Task{
-		Name:       "Delegated Task",
+	task2 := types.Task{
+		Name:       "Delegated types.Task",
 		Command:    "echo 'Running on delegate'",
 		DelegateTo: "otherhost",
 	}
@@ -489,38 +490,38 @@ func TestExecutor_RunOnceAndDelegation(t *testing.T) {
 }
 
 func TestExecutor_DelegateTo(t *testing.T) {
-	execOptions.DryRun = true
+	types.ExecOptions.DryRun = true
 	defer func() {
-		execOptions.DryRun = false
+		types.ExecOptions.DryRun = false
 		ResetRunOnceTracking()
 	}()
 
 	// Create two hosts
-	host1 := Host{Name: "host1", Address: "192.168.1.1"}
-	host2 := Host{Name: "host2", Address: "192.168.1.2"}
+	host1 := types.Host{Name: "host1", Address: "192.168.1.1"}
+	host2 := types.Host{Name: "host2", Address: "192.168.1.2"}
 
 	// Create executors for each host
 	var output1, output2 bytes.Buffer
 
 	executor1 := &Executor{
-		host:           host1,
-		variables:      make(map[string]interface{}),
-		registers:      make(map[string]string),
-		completedTasks: make(map[string]bool),
-		outputWriter:   &output1,
+		Host:           host1,
+		Variables:      make(map[string]interface{}),
+		Registers:      make(map[string]string),
+		CompletedTasks: make(map[string]bool),
+		OutputWriter:   &output1,
 	}
 
 	executor2 := &Executor{
-		host:           host2,
-		variables:      make(map[string]interface{}),
-		registers:      make(map[string]string),
-		completedTasks: make(map[string]bool),
-		outputWriter:   &output2,
+		Host:           host2,
+		Variables:      make(map[string]interface{}),
+		Registers:      make(map[string]string),
+		CompletedTasks: make(map[string]bool),
+		OutputWriter:   &output2,
 	}
 
 	// Create a task delegated to host2
-	delegatedTask := Task{
-		Name:       "Delegated Task",
+	delegatedTask := types.Task{
+		Name:       "Delegated types.Task",
 		Command:    "echo 'Running on delegate'",
 		DelegateTo: "host2",
 	}
@@ -544,7 +545,7 @@ func TestExecutor_DelegateTo(t *testing.T) {
 
 	output2Str := output2.String()
 	if strings.Contains(output2Str, "Skipped") {
-		t.Errorf("Task should not be skipped on the delegated host, got: %q", output2Str)
+		t.Errorf("types.Task should not be skipped on the delegated host, got: %q", output2Str)
 	}
 	if !strings.Contains(output2Str, "Would execute") {
 		t.Errorf("Output should indicate task would execute on the delegated host, got: %q", output2Str)

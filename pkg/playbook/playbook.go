@@ -1,6 +1,10 @@
-package main
+package playbook
 
 import (
+	"github.com/fgouteroux/sshot/pkg/config"
+	"github.com/fgouteroux/sshot/pkg/executor"
+	"github.com/fgouteroux/sshot/pkg/types"
+	"github.com/fgouteroux/sshot/pkg/utils"
 	"bytes"
 	"fmt"
 	"io"
@@ -10,7 +14,7 @@ import (
 	"time"
 )
 
-func executeOnHost(host Host, tasks []Task, captureOutput bool, groupName string) HostResult {
+func executeOnHost(host types.Host, tasks []types.Task, captureOutput bool, groupName string) types.HostResult {
 	var output bytes.Buffer
 	var writer io.Writer = os.Stdout
 
@@ -25,66 +29,66 @@ func executeOnHost(host Host, tasks []Task, captureOutput bool, groupName string
 
 	hostStart := time.Now()
 
-	fmt.Fprintf(writer, "%s┌─ Host: %s%s%s (%s)\n", color(ColorCyan), color(ColorBold), host.Name, color(ColorReset), displayTarget)
-	fmt.Fprintf(writer, "%s│%s\n", color(ColorCyan), color(ColorReset))
+	fmt.Fprintf(writer, "%s┌─ Host: %s%s%s (%s)\n", utils.Color(utils.ColorCyan), utils.Color(utils.ColorBold), host.Name, utils.Color(utils.ColorReset), displayTarget)
+	fmt.Fprintf(writer, "%s│%s\n", utils.Color(utils.ColorCyan), utils.Color(utils.ColorReset))
 
-	executor, err := NewExecutor(host, groupName)
+	exec, err := executor.NewExecutor(host, groupName)
 	if err != nil {
-		fmt.Fprintf(writer, "%s│%s %s✗ Connection failed:%s %v\n", color(ColorCyan), color(ColorReset), color(ColorRed), color(ColorReset), err)
-		fmt.Fprintf(writer, "%s└─ ✗ Connection Failed%s\n\n", color(ColorRed), color(ColorReset))
-		return HostResult{Host: host, Success: false, Error: err, Output: output.String()}
+		fmt.Fprintf(writer, "%s│%s %s✗ Connection failed:%s %v\n", utils.Color(utils.ColorCyan), utils.Color(utils.ColorReset), utils.Color(utils.ColorRed), utils.Color(utils.ColorReset), err)
+		fmt.Fprintf(writer, "%s└─ ✗ Connection Failed%s\n\n", utils.Color(utils.ColorRed), utils.Color(utils.ColorReset))
+		return types.HostResult{Host: host, Success: false, Error: err, Output: output.String()}
 	}
-	defer executor.Close()
+	defer exec.Close()
 
 	if captureOutput {
-		executor.outputWriter = writer
+		exec.OutputWriter = writer
 	}
 
 	// Collect facts if collectors are configured
-	if globalConfig, ok := configCache.Get(); ok && len(globalConfig.Playbook.Facts.Collectors) > 0 {
-		fmt.Fprintf(writer, "%s│%s Gathering system facts...\n", color(ColorCyan), color(ColorReset))
-		if err := executor.CollectFacts(globalConfig.Playbook.Facts); err != nil {
-			if execOptions.Verbose {
+	if globalConfig, ok := config.Cache.Get(); ok && len(globalConfig.Playbook.Facts.Collectors) > 0 {
+		fmt.Fprintf(writer, "%s│%s Gathering system facts...\n", utils.Color(utils.ColorCyan), utils.Color(utils.ColorReset))
+		if err := exec.CollectFacts(globalConfig.Playbook.Facts); err != nil {
+			if types.ExecOptions.Verbose {
 				fmt.Fprintf(writer, "  %s✗%s Facts collection failed: %v\n",
-					color(ColorRed), color(ColorReset), err)
+					utils.Color(utils.ColorRed), utils.Color(utils.ColorReset), err)
 			}
-			return HostResult{Host: host, Success: false, Error: err, Output: output.String()}
+			return types.HostResult{Host: host, Success: false, Error: err, Output: output.String()}
 		}
 	}
 
 	for i, task := range tasks {
 		taskStart := time.Now()
-		fmt.Fprintf(writer, "%s│%s [%d/%d] %s\n", color(ColorCyan), color(ColorReset), i+1, len(tasks), task.Name)
+		fmt.Fprintf(writer, "%s│%s [%d/%d] %s\n", utils.Color(utils.ColorCyan), utils.Color(utils.ColorReset), i+1, len(tasks), task.Name)
 
-		if err := executor.ExecuteTask(task); err != nil {
+		if err := exec.ExecuteTask(task); err != nil {
 			taskDuration := time.Since(taskStart)
 			log.SetOutput(writer)
-			log.Printf("  %s✗%s Task failed after %s: %v\n", color(ColorRed), color(ColorReset), formatDuration(taskDuration), err)
+			log.Printf("  %s✗%s Task failed after %s: %v\n", utils.Color(utils.ColorRed), utils.Color(utils.ColorReset), utils.FormatDuration(taskDuration), err)
 			log.SetOutput(os.Stderr)
-			fmt.Fprintf(writer, "%s└─ ✗ Failed%s (total time: %s)\n\n", color(ColorRed), color(ColorReset), formatDuration(time.Since(hostStart)))
-			return HostResult{Host: host, Success: false, Error: err, Output: output.String()}
+			fmt.Fprintf(writer, "%s└─ ✗ Failed%s (total time: %s)\n\n", utils.Color(utils.ColorRed), utils.Color(utils.ColorReset), utils.FormatDuration(time.Since(hostStart)))
+			return types.HostResult{Host: host, Success: false, Error: err, Output: output.String()}
 		}
 
 		taskDuration := time.Since(taskStart)
-		if execOptions.Verbose || taskDuration > 1*time.Second {
+		if types.ExecOptions.Verbose || taskDuration > 1*time.Second {
 			fmt.Fprintf(writer, "%s│%s         %s⏱%s  Task took %s%s%s\n",
-				color(ColorCyan), color(ColorReset), color(ColorGray), color(ColorReset), color(ColorCyan), formatDuration(taskDuration), color(ColorReset))
+				utils.Color(utils.ColorCyan), utils.Color(utils.ColorReset), utils.Color(utils.ColorGray), utils.Color(utils.ColorReset), utils.Color(utils.ColorCyan), utils.FormatDuration(taskDuration), utils.Color(utils.ColorReset))
 		}
 	}
 
 	totalDuration := time.Since(hostStart)
 	fmt.Fprintf(writer, "%s└─ ✓ Completed%s (total time: %s%s%s)\n\n",
-		color(ColorGreen), color(ColorReset), color(ColorCyan), formatDuration(totalDuration), color(ColorReset))
-	return HostResult{Host: host, Success: true, Error: nil, Output: output.String()}
+		utils.Color(utils.ColorGreen), utils.Color(utils.ColorReset), utils.Color(utils.ColorCyan), utils.FormatDuration(totalDuration), utils.Color(utils.ColorReset))
+	return types.HostResult{Host: host, Success: true, Error: nil, Output: output.String()}
 }
 
-func executeHostsParallel(hosts []Host, tasks []Task, groupName string) []HostResult {
+func executeHostsParallel(hosts []types.Host, tasks []types.Task, groupName string) []types.HostResult {
 	var wg sync.WaitGroup
-	resultsChan := make(chan HostResult, len(hosts))
+	resultsChan := make(chan types.HostResult, len(hosts))
 
 	for _, host := range hosts {
 		wg.Add(1)
-		go func(h Host) {
+		go func(h types.Host) {
 			defer wg.Done()
 			result := executeOnHost(h, tasks, true, groupName)
 			resultsChan <- result
@@ -94,7 +98,7 @@ func executeHostsParallel(hosts []Host, tasks []Task, groupName string) []HostRe
 	wg.Wait()
 	close(resultsChan)
 
-	var results []HostResult
+	var results []types.HostResult
 	for result := range resultsChan {
 		results = append(results, result)
 	}
@@ -111,8 +115,8 @@ func executeHostsParallel(hosts []Host, tasks []Task, groupName string) []HostRe
 	return results
 }
 
-func executeHostsSequential(hosts []Host, tasks []Task, groupName string) []HostResult {
-	var results []HostResult
+func executeHostsSequential(hosts []types.Host, tasks []types.Task, groupName string) []types.HostResult {
+	var results []types.HostResult
 
 	for _, host := range hosts {
 		result := executeOnHost(host, tasks, false, groupName)
@@ -126,13 +130,13 @@ func executeHostsSequential(hosts []Host, tasks []Task, groupName string) []Host
 	return results
 }
 
-func executeWithGroups(config Config) ([]HostResult, error) {
-	// Store the config in the cache if not already set
-	configCache.Set(&config)
+func executeWithGroups(cfg types.Config) ([]types.HostResult, error) {
+	// Store the cfg in the cache if not already set
+	config.Cache.Set(&cfg)
 
-	groups := config.Inventory.Groups
+	groups := cfg.Inventory.Groups
 
-	sortedGroups := make([]Group, len(groups))
+	sortedGroups := make([]types.Group, len(groups))
 	copy(sortedGroups, groups)
 
 	for i := 0; i < len(sortedGroups); i++ {
@@ -143,7 +147,7 @@ func executeWithGroups(config Config) ([]HostResult, error) {
 		}
 	}
 
-	if execOptions.Verbose {
+	if types.ExecOptions.Verbose {
 		log.Printf("[VERBOSE] Executing %d groups in order", len(sortedGroups))
 		for _, g := range sortedGroups {
 			log.Printf("[VERBOSE]   Group: %s (order: %d, hosts: %d, parallel: %v)",
@@ -151,7 +155,7 @@ func executeWithGroups(config Config) ([]HostResult, error) {
 		}
 	}
 
-	var allResults []HostResult
+	var allResults []types.HostResult
 	completedGroups := make(map[string]bool)
 
 	for _, group := range sortedGroups {
@@ -163,18 +167,18 @@ func executeWithGroups(config Config) ([]HostResult, error) {
 			}
 		}
 
-		fmt.Printf("\n%s═══ Group: %s%s%s (order: %d) ═══%s\n", color(ColorMagenta), color(ColorBold), group.Name, color(ColorReset), group.Order, color(ColorReset))
+		fmt.Printf("\n%s═══ Group: %s%s%s (order: %d) ═══%s\n", utils.Color(utils.ColorMagenta), utils.Color(utils.ColorBold), group.Name, utils.Color(utils.ColorReset), group.Order, utils.Color(utils.ColorReset))
 		if len(group.DependsOn) > 0 {
-			fmt.Printf("    %sDependencies:%s %v\n", color(ColorReset), color(ColorReset), group.DependsOn)
+			fmt.Printf("    %sDependencies:%s %v\n", utils.Color(utils.ColorReset), utils.Color(utils.ColorReset), group.DependsOn)
 		}
 		fmt.Printf("\n")
 
-		var groupResults []HostResult
+		var groupResults []types.HostResult
 
 		if group.Parallel {
-			groupResults = executeHostsParallel(group.Hosts, config.Playbook.Tasks, group.Name)
+			groupResults = executeHostsParallel(group.Hosts, cfg.Playbook.Tasks, group.Name)
 		} else {
-			groupResults = executeHostsSequential(group.Hosts, config.Playbook.Tasks, group.Name)
+			groupResults = executeHostsSequential(group.Hosts, cfg.Playbook.Tasks, group.Name)
 		}
 
 		allResults = append(allResults, groupResults...)
@@ -196,7 +200,7 @@ func executeWithGroups(config Config) ([]HostResult, error) {
 	return allResults, nil
 }
 
-func printPlaybookSummary(results []HostResult, totalDuration time.Duration, err error) {
+func printPlaybookSummary(results []types.HostResult, totalDuration time.Duration, err error) {
 	successCount := 0
 	failCount := 0
 	for _, result := range results {
@@ -211,10 +215,10 @@ func printPlaybookSummary(results []HostResult, totalDuration time.Duration, err
 	if err != nil || failCount > 0 {
 		fmt.Printf("║  ✗ PLAYBOOK FAILED                                             ║\n")
 		fmt.Printf("║    Successful: %-3d  Failed: %-3d                                ║\n", successCount, failCount)
-		fmt.Printf("║    Total time: %-47s ║\n", formatDuration(totalDuration))
+		fmt.Printf("║    Total time: %-47s ║\n", utils.FormatDuration(totalDuration))
 		fmt.Printf("╚════════════════════════════════════════════════════════════════╝\n\n")
 
-		if execOptions.Verbose {
+		if types.ExecOptions.Verbose {
 			if err != nil {
 				log.Printf("[VERBOSE] Error: %v", err)
 			}
@@ -226,69 +230,70 @@ func printPlaybookSummary(results []HostResult, totalDuration time.Duration, err
 			}
 		}
 	} else {
-		if execOptions.DryRun {
+		if types.ExecOptions.DryRun {
 			fmt.Printf("║  ✓ DRY-RUN COMPLETED                                           ║\n")
 		} else {
 			fmt.Printf("║  ✓ PLAYBOOK COMPLETED SUCCESSFULLY                             ║\n")
 		}
 		fmt.Printf("║    All %d host(s) completed successfully                        ║\n", successCount)
-		fmt.Printf("║    Total time: %-47s ║\n", formatDuration(totalDuration))
+		fmt.Printf("║    Total time: %-47s ║\n", utils.FormatDuration(totalDuration))
 		fmt.Printf("╚════════════════════════════════════════════════════════════════╝\n\n")
 	}
 }
 
-func RunPlaybook(playbookPath string) error {
+func Run(playbookPath string, options *types.ExecutionOptions) error {
+	types.ExecOptions = *options
 	playbookStart := time.Now()
 
 	// Reset the run_once tracking
-	runOnceTasks.Lock()
-	runOnceTasks.executed = make(map[string]bool)
-	runOnceTasks.Unlock()
+	types.RunOnceTasks.Lock()
+	types.RunOnceTasks.Executed = make(map[string]bool)
+	types.RunOnceTasks.Unlock()
 
 	// Load config (either separate or combined files)
-	config, err := loadConfig(playbookPath, execOptions.InventoryFile)
+	cfg, err := config.Load(playbookPath, types.ExecOptions.InventoryFile)
 	if err != nil {
 		return err
 	}
 
-	// Store the config in the cache for global access
-	configCache.Set(config)
+	// Store the cfg in the cache for global access
+	config.Cache.Set(cfg)
 
 	// Apply SSH defaults to hosts
-	applySSHDefaults(config)
+	config.ApplySSHDefaults(cfg)
 
-	parallel := config.Playbook.Parallel
+	parallel := cfg.Playbook.Parallel
 
-	if execOptions.Verbose {
-		log.Printf("[VERBOSE] Playbook: %s", config.Playbook.Name)
+	if types.ExecOptions.Verbose {
+		log.Printf("[VERBOSE] Playbook: %s", cfg.Playbook.Name)
 		log.Printf("[VERBOSE] Execution mode: %s", map[bool]string{true: "parallel", false: "sequential"}[parallel])
-		log.Printf("[VERBOSE] Dry-run: %v", execOptions.DryRun)
+		log.Printf("[VERBOSE] Dry-run: %v", types.ExecOptions.DryRun)
 	}
 
-	if execOptions.DryRun {
+	if types.ExecOptions.DryRun {
 		fmt.Printf("\n🔍 DRY-RUN MODE - No actual changes will be made\n")
 	}
 
 	fmt.Printf("\n╔════════════════════════════════════════════════════════════════╗\n")
-	fmt.Printf("║  PLAYBOOK: %-52s║\n", config.Playbook.Name)
+	fmt.Printf("║  PLAYBOOK: %-52s║\n", cfg.Playbook.Name)
 	if parallel {
 		fmt.Printf("║  MODE: Parallel Execution                                      ║\n")
 	}
 	fmt.Printf("╚════════════════════════════════════════════════════════════════╝\n\n")
 
-	var results []HostResult
+	var results []types.HostResult
 
-	if len(config.Inventory.Groups) > 0 {
-		results, err = executeWithGroups(*config)
+	if len(cfg.Inventory.Groups) > 0 {
+		results, err = executeWithGroups(*cfg)
 		if err != nil {
 			printPlaybookSummary(results, time.Since(playbookStart), err)
 			return fmt.Errorf("playbook execution failed")
 		}
-	} else if len(config.Inventory.Hosts) > 0 {
+	} else if len(cfg.Inventory.Hosts) > 0 {
 		if parallel {
-			results = executeHostsParallel(config.Inventory.Hosts, config.Playbook.Tasks, "")
+			results = executeHostsParallel(cfg.Inventory.Hosts, cfg.Playbook.Tasks, "")
 		} else {
-			results = executeHostsSequential(config.Inventory.Hosts, config.Playbook.Tasks, "")
+			results = executeHostsSequential(cfg.Inventory.Hosts, cfg.Playbook.Tasks, "")
 		}
 	} else {
 		return fmt.Errorf("no hosts or groups defined in inventory")

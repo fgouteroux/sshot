@@ -1,6 +1,11 @@
-package main
+package executor
 
 import (
+	"net"
+	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/knownhosts"
+	"github.com/fgouteroux/sshot/pkg/types"
+	"github.com/fgouteroux/sshot/pkg/utils"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -18,33 +23,45 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func (e *Executor) CollectFacts(factsConfig FactsConfig) error {
-	writer := e.outputWriter
+type Executor struct {
+	Host           types.Host
+	client         *ssh.Client
+	Variables      map[string]interface{}
+	Registers      map[string]string
+	CompletedTasks map[string]bool
+	GroupName      string
+	mu             sync.Mutex
+	OutputWriter   io.Writer
+	StartTime      time.Time
+}
+
+func (e *Executor) CollectFacts(factsConfig types.FactsConfig) error {
+	writer := e.OutputWriter
 	if writer == nil {
 		writer = os.Stdout
 	}
 
-	if execOptions.Verbose {
+	if types.ExecOptions.Verbose {
 		fmt.Fprintf(writer, "%s│%s Starting facts collection with %d collectors\n",
-			color(ColorCyan), color(ColorReset), len(factsConfig.Collectors))
+			utils.Color(utils.ColorCyan), utils.Color(utils.ColorReset), len(factsConfig.Collectors))
 	}
 
 	// Initialize variables map if nil
-	if e.variables == nil {
-		e.variables = make(map[string]interface{})
+	if e.Variables == nil {
+		e.Variables = make(map[string]interface{})
 	}
 
 	for _, collector := range factsConfig.Collectors {
 		fmt.Fprintf(writer, "  %s⚙%s Collecting facts: %s\n",
-			color(ColorCyan), color(ColorReset), collector.Name)
+			utils.Color(utils.ColorCyan), utils.Color(utils.ColorReset), collector.Name)
 
 		var output string
 		var err error
 
-		if execOptions.DryRun {
+		if types.ExecOptions.DryRun {
 			// In dry-run mode, just show what would be executed
 			fmt.Fprintf(writer, "    %s🔍 DRY-RUN:%s Would execute: %s\n",
-				color(ColorYellow), color(ColorReset), collector.Command)
+				utils.Color(utils.ColorYellow), utils.Color(utils.ColorReset), collector.Command)
 
 			// For testing purposes, in dry-run mode, we'll simulate JSON output
 			// This allows tests to run without an actual SSH connection
@@ -73,17 +90,17 @@ func (e *Executor) CollectFacts(factsConfig FactsConfig) error {
 		}
 
 		// Store the facts under the collector name
-		e.variables[collector.Name] = factData
+		e.Variables[collector.Name] = factData
 
 		// Also flatten the structure for easier access in string templates
-		flattened := flattenMap(factData, collector.Name+".")
+		flattened := FlattenMap(factData, collector.Name+".")
 		for k, v := range flattened {
-			e.variables[k] = v
+			e.Variables[k] = v
 		}
 
-		if execOptions.Verbose {
+		if types.ExecOptions.Verbose {
 			fmt.Fprintf(writer, "    %s→%s Collected %d fact entries\n",
-				color(ColorGray), color(ColorReset), len(flattened))
+				utils.Color(utils.ColorGray), utils.Color(utils.ColorReset), len(flattened))
 		}
 	}
 
@@ -91,7 +108,7 @@ func (e *Executor) CollectFacts(factsConfig FactsConfig) error {
 }
 
 // Add the missing flattenMap function
-func flattenMap(data map[string]interface{}, prefix string) map[string]string {
+func FlattenMap(data map[string]interface{}, prefix string) map[string]string {
 	items := make(map[string]string)
 
 	for k, v := range data {
@@ -100,7 +117,7 @@ func flattenMap(data map[string]interface{}, prefix string) map[string]string {
 		switch typedVal := v.(type) {
 		case map[string]interface{}:
 			// Recursively flatten nested maps
-			subItems := flattenMap(typedVal, key+".")
+			subItems := FlattenMap(typedVal, key+".")
 			for sk, sv := range subItems {
 				items[sk] = sv
 			}
@@ -120,16 +137,16 @@ func flattenMap(data map[string]interface{}, prefix string) map[string]string {
 	return items
 }
 
-func (e *Executor) ExecuteTask(task Task) error {
-	writer := e.outputWriter
+func (e *Executor) ExecuteTask(task types.Task) error {
+	writer := e.OutputWriter
 	if writer == nil {
 		writer = os.Stdout
 	}
 
-	if execOptions.Verbose {
+	if types.ExecOptions.Verbose {
 		e.mu.Lock()
 		log.SetOutput(writer)
-		log.Printf("[VERBOSE] [%s] Executing task: %s", e.host.Name, task.Name)
+		log.Printf("[VERBOSE] [%s] Executing task: %s", e.Host.Name, task.Name)
 		log.SetOutput(os.Stderr)
 		e.mu.Unlock()
 	}
@@ -138,7 +155,7 @@ func (e *Executor) ExecuteTask(task Task) error {
 	if len(task.OnlyGroups) > 0 {
 		groupAllowed := false
 		for _, group := range task.OnlyGroups {
-			if group == e.groupName {
+			if group == e.GroupName {
 				groupAllowed = true
 				break
 			}
@@ -153,7 +170,7 @@ func (e *Executor) ExecuteTask(task Task) error {
 	// Check if task should skip specific groups
 	if len(task.SkipGroups) > 0 {
 		for _, group := range task.SkipGroups {
-			if group == e.groupName {
+			if group == e.GroupName {
 				// Skip task, in excluded group
 				fmt.Fprintf(writer, "  ⊘ Skipped (in excluded group: %s)\n", group)
 				return nil
@@ -163,10 +180,10 @@ func (e *Executor) ExecuteTask(task Task) error {
 
 	// Check for delegation - if this task is delegated to a different host,
 	// skip it unless we're the delegated host
-	if task.DelegateTo != "" && task.DelegateTo != e.host.Name && task.DelegateTo != "localhost" {
+	if task.DelegateTo != "" && task.DelegateTo != e.Host.Name && task.DelegateTo != "localhost" {
 		e.mu.Lock()
 		fmt.Fprintf(writer, "  ↷ Skipped (delegated to: %s)\n", task.DelegateTo)
-		e.completedTasks[task.Name] = true
+		e.CompletedTasks[task.Name] = true
 		e.mu.Unlock()
 		return nil
 	}
@@ -181,28 +198,28 @@ func (e *Executor) ExecuteTask(task Task) error {
 	// Check if this is a run_once task that's already been executed
 	if task.RunOnce {
 		taskKey := task.Name
-		runOnceTasks.RLock()
-		executed := runOnceTasks.executed[taskKey]
-		runOnceTasks.RUnlock()
+		types.RunOnceTasks.RLock()
+		executed := types.RunOnceTasks.Executed[taskKey]
+		types.RunOnceTasks.RUnlock()
 
 		if executed {
 			e.mu.Lock()
 			fmt.Fprintf(writer, "  ↷ Skipped (run_once already executed)\n")
-			e.completedTasks[task.Name] = true
+			e.CompletedTasks[task.Name] = true
 			e.mu.Unlock()
 			return nil
 		}
 
 		// Mark as executed after checking but before actually running
 		// to prevent race conditions in parallel execution
-		runOnceTasks.Lock()
-		runOnceTasks.executed[taskKey] = true
-		runOnceTasks.Unlock()
+		types.RunOnceTasks.Lock()
+		types.RunOnceTasks.Executed[taskKey] = true
+		types.RunOnceTasks.Unlock()
 	}
 
 	if len(task.DependsOn) > 0 {
 		for _, dep := range task.DependsOn {
-			if !e.completedTasks[dep] {
+			if !e.CompletedTasks[dep] {
 				return fmt.Errorf("dependency not met: task '%s' depends on '%s' which has not completed", task.Name, dep)
 			}
 		}
@@ -210,22 +227,22 @@ func (e *Executor) ExecuteTask(task Task) error {
 
 	if task.Vars != nil {
 		for k, v := range task.Vars {
-			e.variables[k] = v
+			e.Variables[k] = v
 		}
 	}
 
 	if task.When != "" {
-		if execOptions.Verbose {
+		if types.ExecOptions.Verbose {
 			e.mu.Lock()
 			log.SetOutput(writer)
-			log.Printf("[VERBOSE] [%s] Evaluating condition: %s", e.host.Name, task.When)
+			log.Printf("[VERBOSE] [%s] Evaluating condition: %s", e.Host.Name, task.When)
 			log.SetOutput(os.Stderr)
 			e.mu.Unlock()
 		}
 		if !e.evaluateCondition(task.When) {
 			e.mu.Lock()
 			fmt.Fprintf(writer, "  ⊘ Skipped (when: %s)\n", task.When)
-			e.completedTasks[task.Name] = true
+			e.CompletedTasks[task.Name] = true
 			e.mu.Unlock()
 			return nil
 		}
@@ -234,15 +251,15 @@ func (e *Executor) ExecuteTask(task Task) error {
 	var output string
 	var err error
 
-	if execOptions.DryRun {
+	if types.ExecOptions.DryRun {
 		e.mu.Lock()
 		fmt.Fprintf(writer, "  🔍 DRY-RUN: Would execute\n")
 
 		// Special handling for delegation
-		if task.DelegateTo != "" && task.DelegateTo != e.host.Name && task.DelegateTo != "localhost" {
-			fmt.Fprintf(writer, "      Command: %s\n", e.substituteVars(task.Command))
+		if task.DelegateTo != "" && task.DelegateTo != e.Host.Name && task.DelegateTo != "localhost" {
+			fmt.Fprintf(writer, "      Command: %s\n", e.SubstituteVars(task.Command))
 			fmt.Fprintf(writer, "      (would be skipped, delegated to: %s)\n", task.DelegateTo)
-			e.completedTasks[task.Name] = true
+			e.CompletedTasks[task.Name] = true
 			e.mu.Unlock()
 			return nil
 		}
@@ -250,23 +267,23 @@ func (e *Executor) ExecuteTask(task Task) error {
 		switch {
 		case task.Command != "" && task.DelegateTo != "":
 			fmt.Fprintf(writer, "      Command: %s (delegated to: %s)\n",
-				e.substituteVars(task.Command), task.DelegateTo)
+				e.SubstituteVars(task.Command), task.DelegateTo)
 			if task.RunOnce {
 				fmt.Fprintf(writer, "      (run once)\n")
 			}
 		case task.Command != "":
-			fmt.Fprintf(writer, "      Command: %s\n", e.substituteVars(task.Command))
+			fmt.Fprintf(writer, "      Command: %s\n", e.SubstituteVars(task.Command))
 		case task.Shell != "":
-			fmt.Fprintf(writer, "      Shell: %s\n", e.substituteVars(task.Shell))
+			fmt.Fprintf(writer, "      Shell: %s\n", e.SubstituteVars(task.Shell))
 		case task.Script != "":
 			fmt.Fprintf(writer, "      Script: %s\n", task.Script)
 		case task.LocalAction != "":
-			fmt.Fprintf(writer, "      Local Action: %s\n", e.substituteVars(task.LocalAction))
+			fmt.Fprintf(writer, "      Local Action: %s\n", e.SubstituteVars(task.LocalAction))
 			if task.RunOnce {
 				fmt.Fprintf(writer, "      (run once)\n")
 			}
 		case task.Copy != nil:
-			fmt.Fprintf(writer, "      Copy: %s → %s\n", task.Copy.Src, e.substituteVars(task.Copy.Dest))
+			fmt.Fprintf(writer, "      Copy: %s → %s\n", task.Copy.Src, e.SubstituteVars(task.Copy.Dest))
 		}
 		if task.Sudo {
 			fmt.Fprintf(writer, "      (with sudo)\n")
@@ -285,7 +302,7 @@ func (e *Executor) ExecuteTask(task Task) error {
 		if task.Timeout > 0 {
 			fmt.Fprintf(writer, "      Timeout: %ds\n", task.Timeout)
 		}
-		e.completedTasks[task.Name] = true
+		e.CompletedTasks[task.Name] = true
 		e.mu.Unlock()
 		return nil
 	}
@@ -321,20 +338,20 @@ func (e *Executor) ExecuteTask(task Task) error {
 			output, err = e.executeCommand(task.Command, task.Sudo)
 			// Check if the exit code is allowed
 			if err != nil && len(task.AllowedExitCodes) > 0 {
-				if execOptions.Verbose {
+				if types.ExecOptions.Verbose {
 					e.mu.Lock()
 					log.SetOutput(writer)
-					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.host.Name, err)
-					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.host.Name, task.AllowedExitCodes)
+					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.Host.Name, err)
+					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.Host.Name, task.AllowedExitCodes)
 					log.SetOutput(os.Stderr)
 					e.mu.Unlock()
 				}
 
 				if e.isAllowedExitCode(err, task.AllowedExitCodes) {
-					if execOptions.Verbose {
+					if types.ExecOptions.Verbose {
 						e.mu.Lock()
 						log.SetOutput(writer)
-						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.host.Name)
+						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.Host.Name)
 						log.SetOutput(os.Stderr)
 						e.mu.Unlock()
 					}
@@ -345,20 +362,20 @@ func (e *Executor) ExecuteTask(task Task) error {
 			output, err = e.executeCommand(task.Shell, task.Sudo)
 			// Check if the exit code is allowed
 			if err != nil && len(task.AllowedExitCodes) > 0 {
-				if execOptions.Verbose {
+				if types.ExecOptions.Verbose {
 					e.mu.Lock()
 					log.SetOutput(writer)
-					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.host.Name, err)
-					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.host.Name, task.AllowedExitCodes)
+					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.Host.Name, err)
+					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.Host.Name, task.AllowedExitCodes)
 					log.SetOutput(os.Stderr)
 					e.mu.Unlock()
 				}
 
 				if e.isAllowedExitCode(err, task.AllowedExitCodes) {
-					if execOptions.Verbose {
+					if types.ExecOptions.Verbose {
 						e.mu.Lock()
 						log.SetOutput(writer)
-						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.host.Name)
+						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.Host.Name)
 						log.SetOutput(os.Stderr)
 						e.mu.Unlock()
 					}
@@ -369,20 +386,20 @@ func (e *Executor) ExecuteTask(task Task) error {
 			output, err = e.executeScript(task.Script, task.Sudo)
 			// Check if the exit code is allowed
 			if err != nil && len(task.AllowedExitCodes) > 0 {
-				if execOptions.Verbose {
+				if types.ExecOptions.Verbose {
 					e.mu.Lock()
 					log.SetOutput(writer)
-					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.host.Name, err)
-					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.host.Name, task.AllowedExitCodes)
+					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.Host.Name, err)
+					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.Host.Name, task.AllowedExitCodes)
 					log.SetOutput(os.Stderr)
 					e.mu.Unlock()
 				}
 
 				if e.isAllowedExitCode(err, task.AllowedExitCodes) {
-					if execOptions.Verbose {
+					if types.ExecOptions.Verbose {
 						e.mu.Lock()
 						log.SetOutput(writer)
-						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.host.Name)
+						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.Host.Name)
 						log.SetOutput(os.Stderr)
 						e.mu.Unlock()
 					}
@@ -393,20 +410,20 @@ func (e *Executor) ExecuteTask(task Task) error {
 			output, err = e.executeLocalAction(task.LocalAction)
 			// Check if the exit code is allowed
 			if err != nil && len(task.AllowedExitCodes) > 0 {
-				if execOptions.Verbose {
+				if types.ExecOptions.Verbose {
 					e.mu.Lock()
 					log.SetOutput(writer)
-					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.host.Name, err)
-					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.host.Name, task.AllowedExitCodes)
+					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.Host.Name, err)
+					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.Host.Name, task.AllowedExitCodes)
 					log.SetOutput(os.Stderr)
 					e.mu.Unlock()
 				}
 
 				if e.isAllowedExitCode(err, task.AllowedExitCodes) {
-					if execOptions.Verbose {
+					if types.ExecOptions.Verbose {
 						e.mu.Lock()
 						log.SetOutput(writer)
-						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.host.Name)
+						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.Host.Name)
 						log.SetOutput(os.Stderr)
 						e.mu.Unlock()
 					}
@@ -417,20 +434,20 @@ func (e *Executor) ExecuteTask(task Task) error {
 			output, err = e.executeDelegated(task.Command, task.DelegateTo)
 			// Check if the exit code is allowed
 			if err != nil && len(task.AllowedExitCodes) > 0 {
-				if execOptions.Verbose {
+				if types.ExecOptions.Verbose {
 					e.mu.Lock()
 					log.SetOutput(writer)
-					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.host.Name, err)
-					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.host.Name, task.AllowedExitCodes)
+					log.Printf("[VERBOSE] [%s] Command failed with error: %v", e.Host.Name, err)
+					log.Printf("[VERBOSE] [%s] Checking against allowed exit codes: %v", e.Host.Name, task.AllowedExitCodes)
 					log.SetOutput(os.Stderr)
 					e.mu.Unlock()
 				}
 
 				if e.isAllowedExitCode(err, task.AllowedExitCodes) {
-					if execOptions.Verbose {
+					if types.ExecOptions.Verbose {
 						e.mu.Lock()
 						log.SetOutput(writer)
-						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.host.Name)
+						log.Printf("[VERBOSE] [%s] Exit code is in allowed list, treating as success", e.Host.Name)
 						log.SetOutput(os.Stderr)
 						e.mu.Unlock()
 					}
@@ -473,11 +490,11 @@ func (e *Executor) ExecuteTask(task Task) error {
 		}
 
 		// Log retry attempt
-		if execOptions.Verbose {
+		if types.ExecOptions.Verbose {
 			e.mu.Lock()
 			log.SetOutput(writer)
 			log.Printf("[VERBOSE] [%s] Attempt %d/%d failed, retrying in %v: %v",
-				e.host.Name, attempt, maxAttempts, retryDelay, err)
+				e.Host.Name, attempt, maxAttempts, retryDelay, err)
 			log.SetOutput(os.Stderr)
 			e.mu.Unlock()
 		} else {
@@ -502,12 +519,12 @@ func (e *Executor) ExecuteTask(task Task) error {
 	}
 
 	if task.Register != "" {
-		e.registers[task.Register] = output
-		e.variables[task.Register] = output
-		if execOptions.Verbose {
+		e.Registers[task.Register] = output
+		e.Variables[task.Register] = output
+		if types.ExecOptions.Verbose {
 			e.mu.Lock()
 			log.SetOutput(writer)
-			log.Printf("[VERBOSE] [%s] Registered output to: %s", e.host.Name, task.Register)
+			log.Printf("[VERBOSE] [%s] Registered output to: %s", e.Host.Name, task.Register)
 			log.SetOutput(os.Stderr)
 			e.mu.Unlock()
 		}
@@ -520,7 +537,7 @@ func (e *Executor) ExecuteTask(task Task) error {
 			if output != "" {
 				e.printOutput(writer, output)
 			}
-			e.completedTasks[task.Name] = true
+			e.CompletedTasks[task.Name] = true
 			e.mu.Unlock()
 			return nil
 		}
@@ -535,39 +552,39 @@ func (e *Executor) ExecuteTask(task Task) error {
 
 	e.mu.Lock()
 	if attempt == 1 {
-		fmt.Fprintf(writer, "  %s✓ Success%s\n", color(ColorGreen), color(ColorReset))
+		fmt.Fprintf(writer, "  %s✓ Success%s\n", utils.Color(utils.ColorGreen), utils.Color(utils.ColorReset))
 	}
 	if output != "" {
 		e.printOutput(writer, output)
 	}
-	e.completedTasks[task.Name] = true
+	e.CompletedTasks[task.Name] = true
 	e.mu.Unlock()
 
 	return nil
 }
 
 func (e *Executor) executeCommand(cmd string, sudo bool) (string, error) {
-	writer := e.outputWriter
+	writer := e.OutputWriter
 	if writer == nil {
 		writer = os.Stdout
 	}
 
-	cmd = e.substituteVars(cmd)
+	cmd = e.SubstituteVars(cmd)
 
 	if sudo {
 		cmd = "sudo -S " + cmd
 	}
 
-	if execOptions.Verbose {
+	if types.ExecOptions.Verbose {
 		e.mu.Lock()
 		log.SetOutput(writer)
-		log.Printf("[VERBOSE] [%s] Executing: %s", e.host.Name, cmd)
+		log.Printf("[VERBOSE] [%s] Executing: %s", e.Host.Name, cmd)
 		log.SetOutput(os.Stderr)
 		e.mu.Unlock()
 	}
 
 	// Handle dry-run mode
-	if execOptions.DryRun {
+	if types.ExecOptions.DryRun {
 		e.mu.Lock()
 		fmt.Fprintf(writer, "  🔍 DRY-RUN: Would execute: %s\n", cmd)
 		e.mu.Unlock()
@@ -594,7 +611,7 @@ func (e *Executor) executeCommand(cmd string, sudo bool) (string, error) {
 	defer session.Close()
 
 	// Check if we should stream output in real-time
-	if execOptions.Progress {
+	if types.ExecOptions.Progress {
 		return e.executeCommandStreaming(session, cmd, writer)
 	}
 
@@ -608,10 +625,10 @@ func (e *Executor) executeCommand(cmd string, sudo bool) (string, error) {
 		output += "\nSTDERR: " + stderr.String()
 	}
 
-	if execOptions.Verbose {
+	if types.ExecOptions.Verbose {
 		e.mu.Lock()
 		log.SetOutput(writer)
-		log.Printf("[VERBOSE] [%s] Command output length: %d bytes", e.host.Name, len(output))
+		log.Printf("[VERBOSE] [%s] Command output length: %d bytes", e.Host.Name, len(output))
 		log.SetOutput(os.Stderr)
 		e.mu.Unlock()
 	}
@@ -721,7 +738,7 @@ func (e *Executor) executeScript(scriptPath string, sudo bool) (string, error) {
 		return "", fmt.Errorf("failed to read script: %w", err)
 	}
 
-	scriptContent := e.substituteVars(string(script))
+	scriptContent := e.SubstituteVars(string(script))
 
 	session, err := e.client.NewSession()
 	if err != nil {
@@ -773,13 +790,13 @@ func (e *Executor) executeScript(scriptPath string, sudo bool) (string, error) {
 	return output, err
 }
 
-func (e *Executor) executeCopy(copyTask *CopyTask) (string, error) {
+func (e *Executor) executeCopy(copyTask *types.CopyTask) (string, error) {
 	content, err := os.ReadFile(copyTask.Src)
 	if err != nil {
 		return "", fmt.Errorf("failed to read source file: %w", err)
 	}
 
-	contentStr := e.substituteVars(string(content))
+	contentStr := e.SubstituteVars(string(content))
 
 	session, err := e.client.NewSession()
 	if err != nil {
@@ -787,7 +804,7 @@ func (e *Executor) executeCopy(copyTask *CopyTask) (string, error) {
 	}
 	defer session.Close()
 
-	dest := e.substituteVars(copyTask.Dest)
+	dest := e.SubstituteVars(copyTask.Dest)
 	cmd := fmt.Sprintf("cat > %s", dest)
 
 	stdin, err := session.StdinPipe()
@@ -863,7 +880,7 @@ func (e *Executor) executeWaitFor(condition string) (string, error) {
 	return "", fmt.Errorf("timeout waiting for: %s", condition)
 }
 
-func (e *Executor) substituteVars(text string) string {
+func (e *Executor) SubstituteVars(text string) string {
 	// Create a template with helper functions
 	funcMap := template.FuncMap{
 		"fact": func(path string) string {
@@ -874,7 +891,7 @@ func (e *Executor) substituteVars(text string) string {
 			}
 
 			// Navigate through the nested structure
-			current, exists := e.variables[parts[0]]
+			current, exists := e.Variables[parts[0]]
 			if !exists {
 				return ""
 			}
@@ -901,7 +918,7 @@ func (e *Executor) substituteVars(text string) string {
 	}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, e.variables); err != nil {
+	if err := tmpl.Execute(&buf, e.Variables); err != nil {
 		return text
 	}
 
@@ -914,14 +931,14 @@ func (e *Executor) evaluateCondition(condition string) bool {
 	if strings.HasSuffix(condition, "is defined") {
 		varName := strings.TrimSuffix(condition, "is defined")
 		varName = strings.TrimSpace(varName)
-		_, exists := e.variables[varName]
+		_, exists := e.Variables[varName]
 		return exists
 	}
 
 	if strings.Contains(condition, "==") {
 		parts := strings.Split(condition, "==")
 		if len(parts) == 2 {
-			left := strings.TrimSpace(e.substituteVars(parts[0]))
+			left := strings.TrimSpace(e.SubstituteVars(parts[0]))
 			right := strings.TrimSpace(strings.Trim(parts[1], "'\""))
 			return left == right
 		}
@@ -998,12 +1015,12 @@ func extractExitCode(err error) int {
 // printOutput handles output formatting with optional truncation
 func (e *Executor) printOutput(writer io.Writer, output string) {
 	// If full output is enabled, show everything
-	if execOptions.FullOutput {
+	if types.ExecOptions.FullOutput {
 		lines := strings.Split(strings.TrimSpace(output), "\n")
 		if len(lines) == 1 {
-			fmt.Fprintf(writer, "    %sOutput:%s %s\n", color(ColorGray), color(ColorReset), strings.TrimSpace(output))
+			fmt.Fprintf(writer, "    %sOutput:%s %s\n", utils.Color(utils.ColorGray), utils.Color(utils.ColorReset), strings.TrimSpace(output))
 		} else {
-			fmt.Fprintf(writer, "    %sOutput:%s (%d lines)\n", color(ColorGray), color(ColorReset), len(lines))
+			fmt.Fprintf(writer, "    %sOutput:%s (%d lines)\n", utils.Color(utils.ColorGray), utils.Color(utils.ColorReset), len(lines))
 			for _, line := range lines {
 				fmt.Fprintf(writer, "      %s\n", line)
 			}
@@ -1011,20 +1028,20 @@ func (e *Executor) printOutput(writer io.Writer, output string) {
 	} else {
 		// Original truncation logic
 		if len(output) < 500 {
-			fmt.Fprintf(writer, "    %sOutput:%s %s\n", color(ColorGray), color(ColorReset), strings.TrimSpace(output))
+			fmt.Fprintf(writer, "    %sOutput:%s %s\n", utils.Color(utils.ColorGray), utils.Color(utils.ColorReset), strings.TrimSpace(output))
 		} else {
 			lines := strings.Split(strings.TrimSpace(output), "\n")
 			if len(lines) <= 10 {
-				fmt.Fprintf(writer, "    %sOutput:%s\n", color(ColorGray), color(ColorReset))
+				fmt.Fprintf(writer, "    %sOutput:%s\n", utils.Color(utils.ColorGray), utils.Color(utils.ColorReset))
 				for _, line := range lines {
 					fmt.Fprintf(writer, "      %s\n", line)
 				}
 			} else {
-				fmt.Fprintf(writer, "    %sOutput%s (showing first 5 and last 5 lines of %d total):\n", color(ColorGray), color(ColorReset), len(lines))
+				fmt.Fprintf(writer, "    %sOutput%s (showing first 5 and last 5 lines of %d total):\n", utils.Color(utils.ColorGray), utils.Color(utils.ColorReset), len(lines))
 				for i := 0; i < 5; i++ {
 					fmt.Fprintf(writer, "      %s\n", lines[i])
 				}
-				fmt.Fprintf(writer, "      %s... (%d lines omitted) ...%s\n", color(ColorGray), len(lines)-10, color(ColorReset))
+				fmt.Fprintf(writer, "      %s... (%d lines omitted) ...%s\n", utils.Color(utils.ColorGray), len(lines)-10, utils.Color(utils.ColorReset))
 				for i := len(lines) - 5; i < len(lines); i++ {
 					fmt.Fprintf(writer, "      %s\n", lines[i])
 				}
@@ -1034,12 +1051,12 @@ func (e *Executor) printOutput(writer io.Writer, output string) {
 }
 
 func (e *Executor) executeLocalAction(cmd string) (string, error) {
-	cmd = e.substituteVars(cmd)
+	cmd = e.SubstituteVars(cmd)
 
-	if execOptions.Verbose {
+	if types.ExecOptions.Verbose {
 		e.mu.Lock()
-		log.SetOutput(e.outputWriter)
-		log.Printf("[VERBOSE] [%s] Executing locally: %s", e.host.Name, cmd)
+		log.SetOutput(e.OutputWriter)
+		log.Printf("[VERBOSE] [%s] Executing locally: %s", e.Host.Name, cmd)
 		log.SetOutput(os.Stderr)
 		e.mu.Unlock()
 	}
@@ -1083,7 +1100,252 @@ func (e *Executor) executeDelegated(cmd string, delegateHost string) (string, er
 }
 
 func ResetRunOnceTracking() {
-	runOnceTasks.Lock()
-	runOnceTasks.executed = make(map[string]bool)
-	runOnceTasks.Unlock()
+	types.RunOnceTasks.Lock()
+	types.RunOnceTasks.Executed = make(map[string]bool)
+	types.RunOnceTasks.Unlock()
+}
+
+func NewExecutor(host types.Host, groupName string) (*Executor, error) {
+	if types.ExecOptions.Verbose {
+		log.Printf("[VERBOSE] Connecting to Host: %s", host.Name)
+	}
+
+	// Get host key callback for verification
+	hostKeyCallback, err := getHostKeyCallback(host.StrictHostKeyCheck)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load host keys: %w", err)
+	}
+
+	config := &ssh.ClientConfig{
+		User:            host.User,
+		HostKeyCallback: hostKeyCallback,
+		Timeout:         10 * time.Second,
+	}
+
+	var authMethods []ssh.AuthMethod
+
+	// Determine which UseAgent to use (host-specific or default)
+	useAgent := host.UseAgent
+
+	if useAgent || (host.KeyFile == "" && host.Password == "" && os.Getenv("SSH_AUTH_SOCK") != "") {
+		if agentAuth := getSSHAgent(); agentAuth != nil {
+			authMethods = append(authMethods, agentAuth)
+			if types.ExecOptions.Verbose {
+				log.Printf("[VERBOSE] [%s] Using ssh-agent for authentication", host.Name)
+			}
+		} else if useAgent {
+			return nil, fmt.Errorf("use_agent is true but ssh-agent is not available")
+		}
+	}
+
+	if host.KeyFile != "" {
+		keyPath := host.KeyFile
+		if strings.HasPrefix(keyPath, "~/") {
+			homeDir, err := os.UserHomeDir()
+			if err == nil {
+				keyPath = strings.Replace(keyPath, "~", homeDir, 1)
+			}
+		}
+
+		if types.ExecOptions.Verbose {
+			log.Printf("[VERBOSE] [%s] Reading key file: %s", host.Name, keyPath)
+		}
+
+		key, err := os.ReadFile(filepath.Clean(keyPath))
+		if err != nil {
+			return nil, fmt.Errorf("unable to read private key: %w", err)
+		}
+
+		var signer ssh.Signer
+		if host.KeyPassword != "" {
+			signer, err = ssh.ParsePrivateKeyWithPassphrase(key, []byte(host.KeyPassword))
+			if err != nil {
+				return nil, fmt.Errorf("unable to parse private key with passphrase: %w", err)
+			}
+		} else {
+			signer, err = ssh.ParsePrivateKey(key)
+			if err != nil {
+				fmt.Printf("Private key for %s appears to be passphrase protected.\n", host.Name)
+				fmt.Printf("Enter passphrase for %s: ", host.KeyFile)
+				var passphrase string
+				_, err = fmt.Scanln(&passphrase)
+				if err != nil {
+					return nil, fmt.Errorf("unable to read stdin for private key passphrase: %w", err)
+				}
+				signer, err = ssh.ParsePrivateKeyWithPassphrase(key, []byte(passphrase))
+				if err != nil {
+					return nil, fmt.Errorf("unable to parse private key with passphrase: %w", err)
+				}
+			}
+		}
+
+		authMethods = append(authMethods, ssh.PublicKeys(signer))
+		if types.ExecOptions.Verbose {
+			log.Printf("[VERBOSE] [%s] Using key file: %s", host.Name, keyPath)
+		}
+	}
+
+	if host.Password != "" {
+		authMethods = append(authMethods, ssh.Password(host.Password))
+		if types.ExecOptions.Verbose {
+			log.Printf("[VERBOSE] [%s] Using password authentication", host.Name)
+		}
+	}
+
+	if len(authMethods) == 0 {
+		return nil, fmt.Errorf("no authentication method provided (try: use_agent: true, key_file, or password)")
+	}
+
+	config.Auth = authMethods
+
+	port := host.Port
+	if port == 0 {
+		port = 22
+	}
+
+	target := host.Address
+	if target == "" {
+		target = host.Hostname
+	}
+	if target == "" {
+		return nil, fmt.Errorf("no address or hostname provided")
+	}
+
+	if types.ExecOptions.Verbose {
+		log.Printf("[VERBOSE] [%s] Dialing %s:%d", host.Name, target, port)
+	}
+
+	if types.ExecOptions.DryRun {
+		if types.ExecOptions.Verbose {
+			log.Printf("[VERBOSE] [%s] DRY-RUN: Skipping actual SSH connection", host.Name)
+		}
+		vars := make(map[string]interface{})
+		if host.Vars != nil {
+			for k, v := range host.Vars {
+				vars[k] = v
+			}
+		}
+
+		return &Executor{
+			Host:           host,
+			client:         nil,
+			Variables:      vars,
+			Registers:      make(map[string]string),
+			CompletedTasks: make(map[string]bool),
+			GroupName:      groupName,
+			OutputWriter:   os.Stdout,
+			StartTime:      time.Now(),
+		}, nil
+	}
+
+	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", target, port), config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial: %w", err)
+	}
+
+	if types.ExecOptions.Verbose {
+		log.Printf("[VERBOSE] [%s] Successfully connected", host.Name)
+	}
+
+	return &Executor{
+		Host:           host,
+		client:         client,
+		Variables:      host.Vars,
+		Registers:      make(map[string]string),
+		CompletedTasks: make(map[string]bool),
+		GroupName:      groupName,
+		OutputWriter:   os.Stdout,
+		StartTime:      time.Now(),
+	}, nil
+}
+
+func getSSHAgent() ssh.AuthMethod {
+	sshAuthSock := os.Getenv("SSH_AUTH_SOCK")
+	if sshAuthSock == "" {
+		return nil
+	}
+
+	conn, err := net.Dial("unix", sshAuthSock)
+	if err != nil {
+		return nil
+	}
+
+	agentClient := agent.NewClient(conn)
+	return ssh.PublicKeysCallback(agentClient.Signers)
+}
+
+func (e *Executor) Close() error {
+	if e.client != nil {
+		return e.client.Close()
+	}
+	return nil
+}
+
+func getHostKeyCallback(strictHostKeyCheck *bool) (ssh.HostKeyCallback, error) {
+	// Determine the actual value to use (default to true if nil)
+	strict := true
+	if strictHostKeyCheck != nil {
+		strict = *strictHostKeyCheck
+	}
+
+	// If strict host key checking is disabled, use insecure callback
+	// This is useful for testing environments but should be avoided in production
+	if !strict {
+		if types.ExecOptions.Verbose {
+			log.Printf("[VERBOSE] WARNING: types.Host key verification is disabled (strict_host_key_check: false)")
+		}
+		return ssh.InsecureIgnoreHostKey(), nil //gosec:disable G106
+	}
+
+	// Try to load known_hosts file
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("unable to get home directory: %w", err)
+	}
+
+	knownHostsPath := filepath.Join(homeDir, ".ssh", "known_hosts")
+
+	// Check if known_hosts exists
+	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
+		// Create .ssh directory if it doesn't exist
+		sshDir := filepath.Join(homeDir, ".ssh")
+		if err := os.MkdirAll(sshDir, 0700); err != nil {
+			return nil, fmt.Errorf("unable to create .ssh directory: %w", err)
+		}
+
+		// Create empty known_hosts file
+		if _, err := os.Create(filepath.Clean(knownHostsPath)); err != nil {
+			return nil, fmt.Errorf("unable to create known_hosts file: %w", err)
+		}
+
+		if types.ExecOptions.Verbose {
+			log.Printf("[VERBOSE] Created new known_hosts file at: %s", knownHostsPath)
+		}
+	}
+
+	// Load known_hosts
+	hostKeyCallback, err := knownhosts.New(knownHostsPath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to load known_hosts: %w", err)
+	}
+
+	// Wrap the callback to provide better error messages
+	return ssh.HostKeyCallback(func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		err := hostKeyCallback(hostname, remote, key)
+		if err != nil {
+			// Extract hostname without port for ssh-keyscan command
+			host, _, splitErr := net.SplitHostPort(hostname)
+			if splitErr != nil {
+				// If splitting fails, use the original hostname
+				host = hostname
+			}
+
+			// Check if this is a host key mismatch or unknown host
+			if keyErr, ok := err.(*knownhosts.KeyError); ok && len(keyErr.Want) > 0 {
+				return fmt.Errorf("host key verification failed for %s: %w\nThe host key has changed. This could indicate a security breach.\nIf you trust this host, remove the old key from %s", hostname, err, knownHostsPath)
+			}
+			return fmt.Errorf("host key verification failed for %s: %w\nTo add this host, run: ssh-keyscan -H %s >> %s", hostname, err, host, knownHostsPath)
+		}
+		return nil
+	}), nil
 }

@@ -20,6 +20,7 @@ lint:
 security:
 	gosec -exclude-dir _local -quiet ./...
 
+.PHONY: test
 test:
 	go test -v -timeout 60s -race -covermode atomic -coverprofile=cover.out -cover  $(TEST)
 	go tool cover -func=cover.out
